@@ -111,21 +111,21 @@
   "metals": [
     {
       "name": "Gold",
-      "price": 4841.6,
-      "change": 3.97
+      "price": 4848.2,
+      "change": 4.11
     },
     {
       "name": "Silver",
-      "price": 76.64,
-      "change": 5.47
+      "price": 76.89,
+      "change": 5.83
     }
   ],
   "eth": {
-    "price": 2224,
-    "change24h": 5.97
+    "price": 2263,
+    "change24h": 7.98
   },
   "btc": {
-    "price": 71423,
-    "change24h": 4.05
+    "price": 72519,
+    "change24h": 5.63
   }
 }
