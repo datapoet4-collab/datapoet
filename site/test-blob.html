@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<title>ATELIER AI — BLOB TEST</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#07030f;font-family:'Courier New',monospace}
+canvas{display:block;position:fixed;inset:0}
+#hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
+#hud .brand{font-size:8px;letter-spacing:5px;color:rgba(255,255,255,0.18);text-transform:uppercase}
+#hud .title{font-size:18px;font-weight:700;letter-spacing:3px;color:#fff;margin-top:3px;text-transform:uppercase}
+#pal{position:fixed;bottom:18px;right:18px;z-index:10;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.pb{font-family:'Courier New',monospace;font-size:8px;letter-spacing:3px;text-transform:uppercase;padding:4px 12px;border:0.5px solid rgba(255,255,255,0.18);background:rgba(0,0,0,0.5);color:rgba(255,255,255,0.3);cursor:pointer;transition:all .25s}
+.pb:hover,.pb.on{color:#fff;border-color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.07)}
+#info{position:fixed;bottom:18px;left:20px;z-index:10;font-size:7px;letter-spacing:3px;color:rgba(255,255,255,0.12);text-transform:uppercase;line-height:2.4;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="brand">Atelier AI · Blob Test</div>
+  <div class="title" id="ht">BLOB · CRIMSON</div>
+</div>
+<div id="pal">
+  <button class="pb on" onclick="setPal(0)">CRIMSON</button>
+  <button class="pb" onclick="setPal(1)">NEON</button>
+  <button class="pb" onclick="setPal(2)">GOLD</button>
+  <button class="pb" onclick="setPal(3)">VIOLET</button>
+  <button class="pb" onclick="setPal(4)">SOLAR</button>
+</div>
+<div id="info"><div>[P] palette · [R] rigenera</div></div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const PALS=[
+  {name:'CRIMSON',bg:0x0a0008,fog:0x1a0015,
+   sphere:new THREE.Color(0.55,0.04,0.12),sphereE:new THREE.Color(0.4,0.0,0.08),
+   blobs:new THREE.Color(0.65,0.06,0.15),blobsE:new THREE.Color(0.35,0.0,0.06),
+   c1:0xff2d78,lA:0xff1155,lB:0x3300ff},
+  {name:'NEON',bg:0x020810,fog:0x041020,
+   sphere:new THREE.Color(0.02,0.28,0.20),sphereE:new THREE.Color(0.0,0.18,0.12),
+   blobs:new THREE.Color(0.04,0.35,0.25),blobsE:new THREE.Color(0.0,0.22,0.15),
+   c1:0x00ffcc,lA:0x00ffaa,lB:0x002266},
+  {name:'GOLD',bg:0x080400,fog:0x180a00,
+   sphere:new THREE.Color(0.55,0.12,0.02),sphereE:new THREE.Color(0.42,0.07,0.0),
+   blobs:new THREE.Color(0.65,0.18,0.03),blobsE:new THREE.Color(0.45,0.08,0.0),
+   c1:0xff8800,lA:0xff8800,lB:0xff2200},
+  {name:'VIOLET',bg:0x060010,fog:0x0a001a,
+   sphere:new THREE.Color(0.22,0.04,0.48),sphereE:new THREE.Color(0.14,0.0,0.35),
+   blobs:new THREE.Color(0.28,0.06,0.58),blobsE:new THREE.Color(0.16,0.0,0.42),
+   c1:0xcc00ff,lA:0xbb00ff,lB:0xff0088},
+  {name:'SOLAR',bg:0x5a1200,fog:0x901800,
+   sphere:new THREE.Color(0.62,0.10,0.02),sphereE:new THREE.Color(0.50,0.04,0.0),
+   blobs:new THREE.Color(0.72,0.14,0.03),blobsE:new THREE.Color(0.55,0.06,0.0),
+   c1:0x4455ff,lA:0x3344ff,lB:0xff5500},
+];
+
+let palIdx=0, renderer, camera, scene, clock, animId;
+
+function setPal(i){
+  palIdx=i;
+  document.querySelectorAll('.pb').forEach((b,j)=>b.classList.toggle('on',j===i));
+  document.getElementById('ht').textContent='BLOB · '+PALS[i].name;
+  buildScene();
+}
+
+function buildScene(){
+  cancelAnimationFrame(animId);
+  if(scene) scene.traverse(o=>{
+    if(o.geometry)o.geometry.dispose();
+    if(o.material)o.material.dispose();
+  });
+
+  const P=PALS[palIdx];
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(P.bg);
+  scene.fog=new THREE.FogExp2(P.fog,0.04);
+
+  // LUCI
+  const L1=new THREE.SpotLight(P.lA,800,60,0.35,0.4);
+  L1.position.set(8,10,12);L1.castShadow=true;
+  L1.shadow.mapSize.set(2048,2048);scene.add(L1);
+  const L2=new THREE.SpotLight(P.lB,400,50,0.5,0.3);
+  L2.position.set(-8,-6,8);scene.add(L2);
+  const L3=new THREE.PointLight(0xffffff,300,30);
+  L3.position.set(0,8,-4);scene.add(L3);
+  scene.add(new THREE.AmbientLight(0x111111));
+
+  // MATERIALE principale — liscio e organico
+  const matMain=new THREE.MeshStandardMaterial({
+    color:P.sphere,roughness:0.15,metalness:0.05,
+    emissive:P.sphereE,emissiveIntensity:0.3
+  });
+  const matBlob=new THREE.MeshStandardMaterial({
+    color:P.blobs,roughness:0.12,metalness:0.04,
+    emissive:P.blobsE,emissiveIntensity:0.25
+  });
+
+  const group=new THREE.Group();
+  scene.add(group);
+
+  // SFERA CENTRALE
+  const coreGeo=new THREE.SphereGeometry(2.2,64,48);
+  const core=new THREE.Mesh(coreGeo,matMain);
+  core.castShadow=true;
+  group.add(core);
+
+  // BOLLE sulla superficie — dimensioni variabili come nell'immagine
+  const blobData=[];
+  const N=180;
+  for(let i=0;i<N;i++){
+    const phi=Math.acos(1-2*(i+0.5)/N);
+    const theta=Math.PI*(1+Math.sqrt(5))*i; // distribuzione aurea
+    const r=0.04+Math.pow(Math.random(),1.8)*0.55; // dimensioni molto variabili
+    const dist=2.2+r*0.85;
+    const nx=Math.sin(phi)*Math.cos(theta);
+    const ny=Math.cos(phi);
+    const nz=Math.sin(phi)*Math.sin(theta);
+    const geo=new THREE.SphereGeometry(r,16,12);
+    const m=new THREE.Mesh(geo,matBlob);
+    m.position.set(nx*dist,ny*dist,nz*dist);
+    m.castShadow=true;
+    group.add(m);
+    // alcune bolle hanno sotto-bolle
+    if(r>0.25 && Math.random()<0.5){
+      const r2=r*0.35+Math.random()*r*0.25;
+      const offset=new THREE.Vector3(
+        (Math.random()-0.5)*r*1.2,
+        (Math.random()-0.5)*r*1.2,
+        (Math.random()-0.5)*r*1.2
+      );
+      const geo2=new THREE.SphereGeometry(r2,12,8);
+      const m2=new THREE.Mesh(geo2,matBlob);
+      m2.position.set(nx*dist+offset.x,ny*dist+offset.y,nz*dist+offset.z);
+      group.add(m2);
+    }
+    blobData.push({m,nx,ny,nz,r,
+      ph:Math.random()*Math.PI*2,
+      sp:0.3+Math.random()*1.2,
+      amp:0.02+Math.random()*0.06});
+  }
+
+  // BOLLE GRANDI fluttuanti attorno
+  for(let i=0;i<12;i++){
+    const r=0.15+Math.random()*0.4;
+    const phi2=Math.random()*Math.PI;
+    const theta2=Math.random()*Math.PI*2;
+    const dist2=2.8+Math.random()*1.5;
+    const geo=new THREE.SphereGeometry(r,20,14);
+    const m=new THREE.Mesh(geo,matBlob);
+    m.position.set(
+      Math.sin(phi2)*Math.cos(theta2)*dist2,
+      Math.cos(phi2)*dist2,
+      Math.sin(phi2)*Math.sin(theta2)*dist2
+    );
+    group.add(m);
+    blobData.push({m,
+      nx:Math.sin(phi2)*Math.cos(theta2),
+      ny:Math.cos(phi2),
+      nz:Math.sin(phi2)*Math.sin(theta2),
+      r,ph:Math.random()*Math.PI*2,
+      sp:0.2+Math.random()*0.5,amp:0.08+Math.random()*0.15,
+      floating:true,dist:dist2});
+  }
+
+  let t=0;
+  function animate(){
+    animId=requestAnimationFrame(animate);
+    t+=0.012;
+
+    // rotazione gruppo lenta
+    group.rotation.y=t*0.08;
+    group.rotation.x=Math.sin(t*0.05)*0.06;
+
+    // bolle pulsano — entrano ed escono dalla superficie
+    blobData.forEach(b=>{
+      const pulse=Math.sin(t*b.sp+b.ph)*b.amp;
+      if(b.floating){
+        const d=b.dist+pulse*2;
+        b.m.position.set(b.nx*d,b.ny*d,b.nz*d);
+        b.m.scale.setScalar(1+pulse*1.5);
+      } else {
+        const d=2.2+b.r*0.85+pulse;
+        b.m.position.set(b.nx*d,b.ny*d,b.nz*d);
+        b.m.scale.setScalar(1+Math.abs(pulse)*0.8);
+      }
+    });
+
+    // luci
+    L1.position.set(8+Math.sin(t*0.1)*2,10+Math.cos(t*0.08)*1.5,12);
+    L1.intensity=750+Math.sin(t*0.9)*100;
+    L2.intensity=350+Math.cos(t*0.7)*80;
+
+    // camera leggera oscillazione
+    camera.position.x=Math.sin(t*0.04)*0.5;
+    camera.position.y=Math.cos(t*0.03)*0.3;
+    camera.lookAt(0,0,0);
+
+    renderer.render(scene,camera);
+  }
+  animate();
+}
+
+function init(){
+  const cv=document.getElementById('c');
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  clock=new THREE.Clock();
+  camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.01,200);
+  camera.position.set(0,0,8);
+  camera.lookAt(0,0,0);
+  buildScene();
+}
+
+window.setPal=setPal;
+document.addEventListener('keydown',e=>{
+  if(e.key==='p'||e.key==='P') setPal((palIdx+1)%PALS.length);
+  if(e.key==='r'||e.key==='R') buildScene();
+});
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+init();
+</script>
+</body>
+</html>

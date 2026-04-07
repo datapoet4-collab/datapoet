@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<title>ATELIER AI — SHAPE TEST</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Courier New',monospace}
+canvas{display:block;position:fixed;inset:0}
+#hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
+#hud .title{font-size:13px;font-weight:700;letter-spacing:3px;color:#fff;text-transform:uppercase}
+#hud .sub{font-size:8px;letter-spacing:3px;color:rgba(255,255,255,0.4);margin-top:3px;text-transform:uppercase}
+#shapes{position:fixed;bottom:50px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:6px}
+#pals{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:6px}
+.sb{font-family:'Courier New',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;padding:4px 10px;border:0.5px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.5);color:rgba(255,255,255,0.35);cursor:pointer;transition:all .2s}
+.sb:hover,.sb.on{color:#fff;border-color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.07)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="title" id="htitle">BLOB · CRIMSON</div>
+  <div class="sub" id="hsub">forma originale del sito</div>
+</div>
+<div id="shapes">
+  <button class="sb on" onclick="setShape(0)">BLOB ★</button>
+  <button class="sb" onclick="setShape(1)">SPHERE</button>
+  <button class="sb" onclick="setShape(2)">CUBE</button>
+  <button class="sb" onclick="setShape(3)">OCTA</button>
+  <button class="sb" onclick="setShape(4)">TORUS</button>
+  <button class="sb" onclick="setShape(5)">ICOSA</button>
+</div>
+<div id="pals">
+  <button class="sb on" onclick="setPal(0)">WAR</button>
+  <button class="sb" onclick="setPal(1)">ECONOMY</button>
+  <button class="sb" onclick="setPal(2)">TECH</button>
+  <button class="sb" onclick="setPal(3)">POLITICS</button>
+  <button class="sb" onclick="setPal(4)">CRISIS</button>
+  <button class="sb" onclick="setPal(5)">HUMAN</button>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const SHAPES=[
+  {name:'BLOB',    desc:'forma originale del sito',
+   core:r=>{ const g=new THREE.SphereGeometry(r,64,48); const p=g.attributes.position; for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);const n=Math.sin(x*4+y*3.2)*Math.cos(y*3.6+z*4)*.18;p.setXYZ(i,x+n*.3,y+n*.4,z+n*.2);}g.computeVertexNormals();return g;},
+   blob:r=>new THREE.SphereGeometry(r,14,10), dist:0.85},
+  {name:'SPHERE',  desc:'sfera liscia con bolle staccate',
+   core:r=>new THREE.SphereGeometry(r,48,36),
+   blob:r=>new THREE.SphereGeometry(r,12,8), dist:1.5},
+  {name:'CUBE',    desc:'cubo con bolle cubiche',
+   core:r=>new THREE.BoxGeometry(r*1.7,r*1.7,r*1.7),
+   blob:r=>new THREE.BoxGeometry(r,r,r), dist:1.3},
+  {name:'OCTA',   desc:'ottaedro con bolle angolari',
+   core:r=>new THREE.OctahedronGeometry(r*1.18,2),
+   blob:r=>new THREE.OctahedronGeometry(r,0), dist:1.2},
+  {name:'TORUS',   desc:'toro con bolle sferiche',
+   core:r=>new THREE.TorusGeometry(r*0.9,r*0.38,32,64),
+   blob:r=>new THREE.SphereGeometry(r,10,8), dist:1.1},
+  {name:'ICOSA',   desc:'icosaedro con bolle angolari',
+   core:r=>new THREE.IcosahedronGeometry(r*1.1,2),
+   blob:r=>new THREE.IcosahedronGeometry(r,0), dist:1.2},
+];
+
+const PALS=[
+  {name:'CRIMSON',sig:'WAR',bg:0x8a0000,fog:0x5a0000,sphere:new THREE.Color(0.80,0.04,0.04),sphereE:new THREE.Color(0.55,0.0,0.0),c1:0xff2d2d,lA:0xff1111,lB:0x440000},
+  {name:'GOLD',sig:'ECONOMY',bg:0x7fff00,fog:0x55cc00,sphere:new THREE.Color(0.855,0.647,0.125),sphereE:new THREE.Color(0.6,0.45,0.08),c1:0xdaa520,lA:0xdaa520,lB:0x446600},
+  {name:'NEON',sig:'TECH',bg:0x020810,fog:0x041020,sphere:new THREE.Color(0.02,0.28,0.20),sphereE:new THREE.Color(0.0,0.18,0.12),c1:0x00ffcc,lA:0x00ffaa,lB:0x002266},
+  {name:'VIOLET',sig:'POLITICS',bg:0x060010,fog:0x0a001a,sphere:new THREE.Color(0.22,0.04,0.48),sphereE:new THREE.Color(0.14,0.0,0.35),c1:0xcc00ff,lA:0xbb00ff,lB:0xff0088},
+  {name:'YELLOW',sig:'CRISIS',bg:0x1a1500,fog:0x0a0a00,sphere:new THREE.Color(0.70,0.60,0.0),sphereE:new THREE.Color(0.50,0.40,0.0),c1:0xffee00,lA:0xffdd00,lB:0x886600},
+  {name:'GRAY',sig:'HUMAN',bg:0xff8c00,fog:0xcc6600,sphere:new THREE.Color(0.38,0.38,0.38),sphereE:new THREE.Color(0.22,0.22,0.22),c1:0x999999,lA:0xaaaaaa,lB:0x444444},
+];
+
+let renderer,camera,scene,animId,blobData=[],group;
+let currentShape=0,currentPal=0;
+
+function init(){
+  const cv=document.getElementById('c');
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true;
+  camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.01,200);
+  camera.position.set(0,0,10);camera.lookAt(0,0,0);
+  build();
+}
+
+function build(){
+  cancelAnimationFrame(animId);
+  if(scene)scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose();});
+
+  const S=SHAPES[currentShape];
+  const P=PALS[currentPal];
+
+  document.getElementById('htitle').textContent=S.name+' · '+P.name;
+  document.getElementById('hsub').textContent=S.desc+' — '+P.sig;
+  document.querySelectorAll('#shapes .sb').forEach((b,i)=>b.classList.toggle('on',i===currentShape));
+  document.querySelectorAll('#pals .sb').forEach((b,i)=>b.classList.toggle('on',i===currentPal));
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(P.bg);
+  scene.fog=new THREE.FogExp2(P.fog,0.022);
+
+  const L1=new THREE.SpotLight(P.lA,700,50,.28,.2);L1.position.set(5,7,10);L1.castShadow=true;scene.add(L1);
+  const L2=new THREE.SpotLight(P.lB,400,40,.4,.3);L2.position.set(-6,-4,7);scene.add(L2);
+  scene.add(new THREE.AmbientLight(0x111111));
+
+  const matC=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.12,metalness:0.05,emissive:P.sphereE,emissiveIntensity:0.5});
+  const matB=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.10,metalness:0.04,emissive:P.sphereE,emissiveIntensity:0.4});
+
+  group=new THREE.Group();scene.add(group);
+  group.add(new THREE.Mesh(S.core(2.2),matC));
+
+  blobData=[];
+  const N=160;
+  for(let i=0;i<N;i++){
+    const phi=Math.acos(1-2*(i+0.5)/N);
+    const theta=Math.PI*(1+Math.sqrt(5))*i;
+    const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+    const r=0.03+Math.pow(Math.random(),1.8)*0.38;
+    const dist=2.2+r*S.dist;
+    const m=new THREE.Mesh(S.blob(r),matB);
+    m.position.set(nx*dist,ny*dist,nz*dist);
+    if(currentShape>=2) m.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+    group.add(m);
+    blobData.push({m,nx,ny,nz,dist,ph:i*0.07,sp:0.3+Math.random()*1.2,amp:0.012+Math.random()*0.03,r});
+  }
+
+  let t=0;
+  function animate(){
+    animId=requestAnimationFrame(animate);t+=0.012;
+    group.rotation.y+=0.004;
+    group.rotation.x=Math.sin(t*0.04)*0.04;
+    blobData.forEach(b=>{
+      const pulse=Math.sin(t*b.sp+b.ph)*b.amp;
+      b.m.position.set(b.nx*(b.dist+pulse),b.ny*(b.dist+pulse),b.nz*(b.dist+pulse));
+      if(currentShape>=2){b.m.rotation.y+=0.007;b.m.rotation.x+=0.004;}
+    });
+    L1.intensity=550+Math.sin(t*0.9)*80;
+    renderer.render(scene,camera);
+  }
+  animate();
+}
+
+window.setShape=i=>{currentShape=i;build();};
+window.setPal=i=>{currentPal=i;build();};
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+init();
+</script>
+</body>
+</html>

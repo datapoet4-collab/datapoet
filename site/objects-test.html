@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"/><style>*{margin:0;padding:0}body{overflow:hidden;background:#000}</style></head>
+<body>
+<div style="position:fixed;top:10px;left:50%;transform:translateX(-50%);color:#444;font-size:.6rem;letter-spacing:.2em;font-family:monospace;z-index:10">
+  OBJECTS TEST — tutti gli elementi
+</div>
+<script type="module">
+import * as THREE from '/three.module.js';
+const W=window.innerWidth,H=window.innerHeight;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setClearColor(0xbbbbbb,1);
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(70,W/H,.01,200);
+camera.position.set(0,0,18);
+camera.lookAt(0,0,0);
+
+const L1=new THREE.SpotLight(0xffffff,500,60,.3,.2);
+L1.position.set(8,10,12);L1.castShadow=true;scene.add(L1);
+const L2=new THREE.PointLight(0xff2200,200,40);L2.position.set(-8,-5,6);scene.add(L2);
+const L3=new THREE.PointLight(0x4488ff,150,35);L3.position.set(5,-8,4);scene.add(L3);
+scene.add(new THREE.AmbientLight(0x080808));
+
+function mM(c,r){return new THREE.MeshStandardMaterial({color:c,roughness:r||.08,metalness:.96});}
+function mG(c,ei){return new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:ei||.9,roughness:.02,metalness:.98});}
+function mR(c,r,m){return new THREE.MeshStandardMaterial({color:c,roughness:r||.5,metalness:m||.3});}
+
+// etichetta per ogni oggetto
+function makeLabel(name,col){
+  const cv=document.createElement('canvas');cv.width=256;cv.height=48;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,256,48);
+  ctx.font='bold 22px monospace';ctx.fillStyle=col||'#ffffff';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(name,128,24);
+  return new THREE.CanvasTexture(cv);
+}
+function addLabel(name,col,x,y,z){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(2,.4),
+    new THREE.MeshBasicMaterial({map:makeLabel(name,col),transparent:true,side:THREE.DoubleSide}));
+  m.position.set(x,y,z);scene.add(m);
+}
+
+const objects=[];
+
+// ============================================
+// 1. MISSILE — rosso acceso
+// ============================================
+function makeMissile(sc){
+  const g=new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,2,10),mM(0x888888,.08)));
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(.08,.5,10),mG(0xff0000,.9));
+  tip.position.y=1.25;g.add(tip);
+  for(let f=0;f<4;f++){
+    const fin=new THREE.Mesh(new THREE.BoxGeometry(.22,.4,.012),mM(0x555555,.1));
+    fin.position.set(.1,-.75,0);fin.rotation.y=f*1.5708;g.add(fin);
+  }
+  const fl=new THREE.Mesh(new THREE.ConeGeometry(.06,.25,6),mG(0xff6600,.8));
+  fl.position.y=-1.12;fl.rotation.x=Math.PI;g.add(fl);
+  g.scale.setScalar(sc||1);
+  return g;
+}
+const missile=makeMissile(1.2);
+missile.position.set(-9,3,0);missile.rotation.z=.3;
+scene.add(missile);
+addLabel('MISSILE','#ff2200',-9,5.5,0);
+objects.push({m:missile,rotY:.008,rotX:.003});
+
+// ============================================
+// 2. NAVE — minimal, stilizzata come missile
+// ============================================
+function makeShip(){
+  const g=new THREE.Group();
+  // scafo lungo e basso
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(3.5,.25,.7),mM(0x334466,.1));
+  g.add(hull);
+  // prua triangolare
+  const bow=new THREE.Mesh(new THREE.ConeGeometry(.35,.8,3),mM(0x334466,.1));
+  bow.position.set(2.1,0,0);bow.rotation.z=-Math.PI/2;bow.rotation.y=Math.PI/4;g.add(bow);
+  // ponte sopraelevato
+  const bridge=new THREE.Mesh(new THREE.BoxGeometry(1,.5,.55),mM(0x445577,.12));
+  bridge.position.set(-.3,.37,0);g.add(bridge);
+  // torretta
+  const turret=new THREE.Mesh(new THREE.CylinderGeometry(.14,.18,.3,8),mM(0x223355,.08));
+  turret.position.set(.5,.42,0);g.add(turret);
+  // cannone lungo
+  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.9,6),mG(0x4488ff,.5));
+  barrel.position.set(1.0,.42,0);barrel.rotation.z=Math.PI/2;g.add(barrel);
+  // antenna
+  const ant=new THREE.Mesh(new THREE.CylinderGeometry(.01,.01,.6,4),mM(0x888888,.05));
+  ant.position.set(-.3,.75,0);g.add(ant);
+  return g;
+}
+const ship=makeShip();
+ship.position.set(-3,3,0);
+scene.add(ship);
+addLabel('WARSHIP','#4488ff',-3,5.5,0);
+objects.push({m:ship,rotY:.005,float:true,ph:0});
+
+// ============================================
+// 3. DRONE — quadricottero stilizzato
+// ============================================
+function makeDrone(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(.5,.1,.3),mM(0x222222,.1));
+  g.add(body);
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([bx,bz],i)=>{
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(Math.abs(bx)>.5?.45:.05,.05,Math.abs(bz)>.5?.45:.05),mM(0x111111,.15));
+    arm.position.set(bx*.28,0,bz*.28);g.add(arm);
+    const rotor=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.02,8),mM(0x333333,.1));
+    rotor.position.set(bx*.28+bx*.18,0,bz*.28+bz*.18);rotor.userData.isRotor=true;g.add(rotor);
+    for(let p=0;p<2;p++){
+      const blade=new THREE.Mesh(new THREE.BoxGeometry(.16,.008,.025),mG(0x00ffaa,.4));
+      blade.position.copy(rotor.position);blade.rotation.y=p*Math.PI/2;g.add(blade);
+    }
+  });
+  const cam=new THREE.Mesh(new THREE.SphereGeometry(.04,8,6),mG(0xff2200,.7));
+  cam.position.set(0,-.07,.12);g.add(cam);
+  return g;
+}
+const drone=makeDrone();
+drone.position.set(3,3,0);drone.scale.setScalar(2.5);
+scene.add(drone);
+addLabel('DRONE','#00ffaa',3,5.5,0);
+objects.push({m:drone,rotY:.01,isRotor:true});
+
+// ============================================
+// 4. AEREO/CACCIA — stilizzato
+// ============================================
+function makePlane(){
+  const g=new THREE.Group();
+  // fusoliera affusolata
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(.06,.8,8),mM(0x777777,.06));
+  nose.rotation.z=-Math.PI/2;nose.position.x=1.4;g.add(nose);
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.1,.08,2,8),mM(0x888888,.06));
+  body.rotation.z=Math.PI/2;g.add(body);
+  const rear=new THREE.Mesh(new THREE.ConeGeometry(.08,.5,8),mM(0x666666,.08));
+  rear.rotation.z=Math.PI/2;rear.position.x=-1.2;g.add(rear);
+  // ali a delta — swept back 60 gradi
+  [-1,1].forEach(s=>{
+    const wingShape=new THREE.Shape();
+    wingShape.moveTo(0,0);
+    wingShape.lineTo(-1.2,s*.05);
+    wingShape.lineTo(-1.8,s*1.1);
+    wingShape.lineTo(-.2,s*.35);
+    wingShape.closePath();
+    const wingGeo=new THREE.ExtrudeGeometry(wingShape,{depth:.02,bevelEnabled:false});
+    const wing=new THREE.Mesh(wingGeo,mM(0x777777,.07));
+    wing.rotation.x=Math.PI/2;g.add(wing);
+    // bordo ala acceso
+    const edge=new THREE.Mesh(new THREE.BoxGeometry(1.6,.015,.35),mG(0xff4400,.4));
+    edge.position.set(-.9,0,s*.55);edge.rotation.y=s*.5;g.add(edge);
+  });
+  // canard — alette anteriori piccole
+  [-1,1].forEach(s=>{
+    const canard=new THREE.Mesh(new THREE.BoxGeometry(.4,.01,.2),mM(0x777777,.07));
+    canard.position.set(.7,0,s*.18);canard.rotation.y=s*.3;g.add(canard);
+  });
+  // coda verticale
+  const vtail=new THREE.Mesh(new THREE.BoxGeometry(.4,.35,.02),mM(0x666666,.08));
+  vtail.position.set(-.9,.18,0);g.add(vtail);
+  // motore posteriore
+  const eng=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,.4,10),mM(0x444444,.05));
+  eng.rotation.z=Math.PI/2;eng.position.x=-1.1;g.add(eng);
+  const afterburner=new THREE.Mesh(new THREE.ConeGeometry(.09,.35,8),mG(0xff6600,.9));
+  afterburner.rotation.z=Math.PI/2;afterburner.position.x=-1.45;g.add(afterburner);
+  // cockpit
+  const cockpit=new THREE.Mesh(new THREE.SphereGeometry(.1,10,8),
+    new THREE.MeshStandardMaterial({color:0x88ccff,roughness:.05,metalness:.1,transparent:true,opacity:.7}));
+  cockpit.position.set(.8,.1,0);cockpit.scale.set(1.2,.6,1);g.add(cockpit);
+  return g;
+}
+const plane=makePlane();
+plane.position.set(9,3,0);plane.scale.setScalar(1.5);
+scene.add(plane);
+addLabel('FIGHTER JET','#ff6600',9,5.5,0);
+objects.push({m:plane,rotY:.006,rotZ:.002});
+
+// ============================================
+// 5. TANK — stilizzato minimal
+// ============================================
+function makeTank(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.8,.5,1),mR(0x445533,.6,.2));
+  g.add(body);
+  const turret=new THREE.Mesh(new THREE.CylinderGeometry(.32,.38,.35,8),mR(0x556644,.55,.2));
+  turret.position.y=.42;g.add(turret);
+  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,1.2,6),mM(0x333322,.1));
+  barrel.rotation.z=Math.PI/2;barrel.position.set(.9,.42,0);g.add(barrel);
+  // cingoli
+  [-1,1].forEach(s=>{
+    const track=new THREE.Mesh(new THREE.BoxGeometry(2,.3,.15),mR(0x222211,.8,.1));
+    track.position.set(0,-.22,s*.52);g.add(track);
+  });
+  return g;
+}
+const tank=makeTank();
+tank.position.set(-9,-3,0);tank.scale.setScalar(1.5);
+scene.add(tank);
+addLabel('TANK','#88aa00',-9,-1,0);
+objects.push({m:tank,rotY:.006});
+
+// ============================================
+// 6. BOMBA
+// ============================================
+function makeBomb(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(.4,16,12),mM(0x222222,.1));
+  body.scale.y=1.8;g.add(body);
+  // alette
+  for(let i=0;i<4;i++){
+    const fin=new THREE.Mesh(new THREE.BoxGeometry(.3,.35,.02),mM(0x444444,.1));
+    fin.position.y=-.55;fin.rotation.y=i*Math.PI/2;fin.position.x=.15;g.add(fin);
+  }
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(.12,.3,8),mG(0xff0000,.8));
+  tip.position.y=.7;g.add(tip);
+  return g;
+}
+const bomb=makeBomb();
+bomb.position.set(-3,-3,0);bomb.scale.setScalar(1.5);
+scene.add(bomb);
+addLabel('BOMB','#ff0000',-3,-1,0);
+objects.push({m:bomb,rotY:.008,rotX:.004});
+
+// ============================================
+// 7. SATELLITE — spazio/tech
+// ============================================
+function makeSatellite(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(.6,.6,.6),mM(0x888888,.1));
+  g.add(body);
+  // pannelli solari
+  [-1,1].forEach(s=>{
+    const panel=new THREE.Mesh(new THREE.BoxGeometry(1.4,.04,.6),mG(0x0044ff,.4));
+    panel.position.x=s*.9;g.add(panel);
+    // celle
+    for(let c=0;c<4;c++){
+      const cell=new THREE.Mesh(new THREE.BoxGeometry(.28,.02,.5),mG(0x0066ff,.5));
+      cell.position.set(s*.9+(c-.15)*.3,0,0);g.add(cell);
+    }
+  });
+  // antenna
+  const dish=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.02,12),mM(0xaaaaaa,.05));
+  dish.position.y=.35;g.add(dish);
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.2,6),mM(0x888888,.1));
+  stem.position.y=.45;g.add(stem);
+  return g;
+}
+const sat=makeSatellite();
+sat.position.set(3,-3,0);sat.scale.setScalar(1.8);
+scene.add(sat);
+addLabel('SATELLITE','#0066ff',3,-1,0);
+objects.push({m:sat,rotY:.007,rotX:.003});
+
+// ============================================
+// 8. CROCE MEDICA — farmaceutica
+// ============================================
+function makeCross(){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0x00cc44,emissive:0x00aa33,emissiveIntensity:.7,roughness:.3,metalness:.1});
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(.18,.7,.1),mat));
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(.7,.18,.1),mat));
+  // bordo bianco
+  const border=new THREE.Mesh(new THREE.BoxGeometry(.22,.74,.08),
+    new THREE.MeshStandardMaterial({color:0xffffff,roughness:.4,metalness:.1}));
+  border.position.z=-.01;g.add(border);
+  const border2=new THREE.Mesh(new THREE.BoxGeometry(.74,.22,.08),
+    new THREE.MeshStandardMaterial({color:0xffffff,roughness:.4,metalness:.1}));
+  border2.position.z=-.01;g.add(border2);
+  return g;
+}
+const cross=makeCross();
+cross.position.set(9,-3,0);cross.scale.setScalar(2);
+scene.add(cross);
+addLabel('PHARMA ✚','#00ff44',9,-1,0);
+objects.push({m:cross,rotY:.01,rotX:.005,rotZ:.003});
+
+// ============================================
+// 9. SFERE ORO e ARGENTO
+// ============================================
+const goldMat=new THREE.MeshStandardMaterial({color:0xffcc00,roughness:.08,metalness:.96,emissive:0xffaa00,emissiveIntensity:.3});
+const silverMat=new THREE.MeshStandardMaterial({color:0xdddddd,roughness:.06,metalness:.98,emissive:0x888888,emissiveIntensity:.15});
+
+const goldGroup=new THREE.Group();
+for(let i=0;i<6;i++){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(.18,12,10),goldMat);
+  m.position.set(Math.cos(i/6*Math.PI*2)*1.2,Math.sin(i/6*Math.PI*2)*.5,Math.sin(i/6*Math.PI*2)*.3);
+  goldGroup.add(m);
+}
+goldGroup.position.set(-6,0,0);scene.add(goldGroup);
+addLabel('GOLD','#ffcc00',-6,2,0);
+objects.push({m:goldGroup,rotY:.012});
+
+const silverGroup=new THREE.Group();
+for(let i=0;i<8;i++){
+  const m=new THREE.Mesh(new THREE.SphereGeometry(.13,10,8),silverMat);
+  m.position.set(Math.cos(i/8*Math.PI*2)*1.1,Math.sin(i/8*Math.PI*2)*.4,Math.sin(i/8*Math.PI*2)*.25);
+  silverGroup.add(m);
+}
+silverGroup.position.set(6,0,0);scene.add(silverGroup);
+addLabel('SILVER','#cccccc',6,2,0);
+objects.push({m:silverGroup,rotY:.009});
+
+// ============================================
+// NOMI PERSONE — scritte colorate
+// ============================================
+const names=[
+  {t:'TRUMP',c:'#ff2200',x:-4,y:0},
+  {t:'PUTIN',c:'#4488ff',x:0,y:0},
+  {t:'ZELENSKY',c:'#00ff44',x:4,y:0},
+];
+names.forEach(n=>{
+  const cv=document.createElement('canvas');cv.width=256;cv.height=64;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,256,64);
+  ctx.font='bold 32px monospace';ctx.fillStyle=n.c;
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(n.t,128,32);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(2.5,.6),
+    new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true,side:THREE.DoubleSide}));
+  m.position.set(n.x,n.y,0);scene.add(m);
+  objects.push({m,rotY:.005,label:true});
+});
+
+
+// ============================================
+// FULMINE — cyber attack
+// ============================================
+function makeLightning(){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0xffff00,emissive:0xffee00,emissiveIntensity:1.2,roughness:.02,metalness:.1});
+  // forma fulmine a zigzag
+  const points=[
+    new THREE.Vector3(0.1,1,0),
+    new THREE.Vector3(-0.1,0.4,0),
+    new THREE.Vector3(0.2,0.4,0),
+    new THREE.Vector3(-0.15,-0.3,0),
+    new THREE.Vector3(0.1,-0.3,0),
+    new THREE.Vector3(-0.2,-1,0),
+  ];
+  for(let i=0;i<points.length-1;i++){
+    const dir=new THREE.Vector3().subVectors(points[i+1],points[i]);
+    const len=dir.length();
+    const seg=new THREE.Mesh(
+      new THREE.CylinderGeometry(.04,.04,len,6),
+      mat
+    );
+    const mid=new THREE.Vector3().addVectors(points[i],points[i+1]).multiplyScalar(.5);
+    seg.position.copy(mid);
+    seg.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize());
+    g.add(seg);
+  }
+
+  return g;
+}
+const lightning=makeLightning();
+lightning.position.set(0,0,0);lightning.scale.setScalar(2);
+scene.add(lightning);
+addLabel('CYBER ATTACK','#ffff00',0,3.5,0);
+objects.push({m:lightning,rotY:.01,pulse:true});
+
+let t=0;
+function animate(){
+  requestAnimationFrame(animate);t+=.016;
+  objects.forEach(o=>{
+    if(o.rotY) o.m.rotation.y+=o.rotY;
+    if(o.rotX) o.m.rotation.x+=o.rotX;
+    if(o.rotZ) o.m.rotation.z+=o.rotZ;
+    if(o.float) o.m.position.y=3+Math.sin(t*.8+o.ph||0)*.15;
+    if(o.isRotor) o.m.children.forEach(c=>{if(c.userData.isRotor)c.rotation.y+=.3;});
+    if(o.label) o.m.lookAt(camera.position);
+    if(o.pulse){
+      const pi=.6+Math.sin(t*8)*.6;
+      o.m.children.forEach(c=>{if(c.material&&c.material.emissiveIntensity!==undefined)c.material.emissiveIntensity=pi;});
+    }
+  });
+  // missile fiamma pulsa
+  missile.children.forEach(c=>{
+    if(c.material&&c.material.emissiveIntensity>.5&&c.position.y<-1)
+      c.material.emissiveIntensity=.6+Math.sin(t*8)*.3;
+  });
+  L1.position.set(8+Math.sin(t*.1)*2,10+Math.cos(t*.08)*1,12);
+  L2.position.set(-8+Math.cos(t*.09)*2,-5+Math.sin(t*.07)*1,6);
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>

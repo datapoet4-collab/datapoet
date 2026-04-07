@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<style>
+*{margin:0;padding:0}
+body{background:#000;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Courier New',monospace}
+#msg{color:#fff;font-size:12px;letter-spacing:3px;text-align:center;position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:100}
+canvas{display:block}
+</style>
+</head>
+<body>
+<div id="msg">AVVIO REGISTRAZIONE...</div>
+<canvas id="c"></canvas>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const W=1920,H=1080;
+const cv=document.getElementById('c');
+cv.width=W;cv.height=H;
+cv.style.width=W+'px';cv.style.height=H+'px';
+
+const PALS=[
+  {name:'WAR·CRIMSON',bg:0x8a0000,sphere:new THREE.Color(0.80,0.04,0.04),sphereE:new THREE.Color(0.55,0.0,0.0),lA:0xff1111,lB:0x440000},
+  {name:'ECONOMY·GOLD',bg:0x7fff00,sphere:new THREE.Color(0.855,0.647,0.125),sphereE:new THREE.Color(0.6,0.45,0.08),lA:0xdaa520,lB:0x446600},
+  {name:'TECH·NEON',bg:0x020810,sphere:new THREE.Color(0.02,0.28,0.20),sphereE:new THREE.Color(0.0,0.18,0.12),lA:0x00ffaa,lB:0x002266},
+  {name:'POLITICS·VIOLET',bg:0x060010,sphere:new THREE.Color(0.22,0.04,0.48),sphereE:new THREE.Color(0.14,0.0,0.35),lA:0xbb00ff,lB:0xff0088},
+  {name:'CRISIS·YELLOW',bg:0x1a1500,sphere:new THREE.Color(0.70,0.60,0.0),sphereE:new THREE.Color(0.50,0.40,0.0),lA:0xffdd00,lB:0x886600},
+  {name:'HUMAN·GRAY',bg:0xff8c00,sphere:new THREE.Color(0.38,0.38,0.38),sphereE:new THREE.Color(0.22,0.22,0.22),lA:0xaaaaaa,lB:0x444444},
+];
+
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H);
+renderer.shadowMap.enabled=true;
+
+const camera=new THREE.PerspectiveCamera(60,W/H,0.01,200);
+camera.position.set(0,0,7);
+camera.lookAt(0,0,0);
+
+let scene, group, blobData=[], t=0, palIdx=0;
+
+function buildScene(P){
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(P.bg);
+  const L1=new THREE.SpotLight(P.lA,600,40,0.3,0.4);
+  L1.position.set(5,7,8);scene.add(L1);
+  const L2=new THREE.SpotLight(P.lB,300,30,0.5,0.3);
+  L2.position.set(-5,-4,6);scene.add(L2);
+  scene.add(new THREE.AmbientLight(0x111111));
+  const matC=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.12,metalness:0.05,emissive:P.sphereE,emissiveIntensity:0.5});
+  const matB=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.10,metalness:0.04,emissive:P.sphereE,emissiveIntensity:0.4});
+  group=new THREE.Group();scene.add(group);
+  group.add(new THREE.Mesh(new THREE.SphereGeometry(2.0,48,36),matC));
+  blobData=[];
+  for(let i=0;i<140;i++){
+    const phi=Math.acos(1-2*(i+0.5)/140);
+    const theta=Math.PI*(1+Math.sqrt(5))*i;
+    const r=0.03+Math.pow(Math.random(),1.6)*0.38;
+    const dist=2.0+r*0.85;
+    const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),matB);
+    m.position.set(nx*dist,ny*dist,nz*dist);
+    group.add(m);
+    blobData.push({m,nx,ny,nz,dist,ph:i*0.07,sp:0.3+Math.random()*1.2,amp:0.015+Math.random()*0.04});
+  }
+}
+
+// Registrazione
+const stream=cv.captureStream(30);
+const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:80000000});
+const chunks=[];
+rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+rec.onstop=()=>{
+  const blob=new Blob(chunks,{type:'video/webm'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='atelier-palette-'+new Date().toISOString().split('T')[0]+'.webm';
+  a.click();
+  document.getElementById('msg').textContent='✅ SCARICATO!';
+};
+
+const DURATION=25; // secondi totali (5 sec x palette... ma 6 palette = ~4s ciascuna)
+const PAL_DUR=4; // secondi per palette
+rec.start();
+document.getElementById('msg').textContent='⏺ REC — '+PALS[0].name;
+buildScene(PALS[0]);
+
+let startTime=null;
+function animate(ts){
+  if(!startTime)startTime=ts;
+  const elapsed=(ts-startTime)/1000;
+  
+  // Cambia palette ogni PAL_DUR secondi
+  const newPalIdx=Math.min(Math.floor(elapsed/PAL_DUR),PALS.length-1);
+  if(newPalIdx!==palIdx){
+    palIdx=newPalIdx;
+    buildScene(PALS[palIdx]);
+    document.getElementById('msg').textContent='⏺ REC — '+PALS[palIdx].name+' ('+(DURATION-Math.floor(elapsed))+'s)';
+  }
+
+  t+=0.015;
+  if(group){
+    group.rotation.y=t*0.09;
+    group.rotation.x=Math.sin(t*0.04)*0.05;
+    blobData.forEach(b=>{
+      const pulse=Math.sin(t*b.sp+b.ph)*b.amp;
+      const d=b.dist+pulse;
+      b.m.position.set(b.nx*d,b.ny*d,b.nz*d);
+      b.m.scale.setScalar(1+Math.abs(pulse)*0.8);
+    });
+  }
+  renderer.render(scene,camera);
+
+  if(elapsed<DURATION){
+    requestAnimationFrame(animate);
+  } else {
+    rec.stop();
+  }
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

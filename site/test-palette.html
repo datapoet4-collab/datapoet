@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<title>ATELIER AI — PALETTE TEST</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#111;font-family:'Courier New',monospace}
+#grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);width:100%;height:100%;gap:2px}
+.cell{position:relative;cursor:pointer;overflow:hidden}
+.cell canvas{display:block;width:100%;height:100%}
+.cell .label{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:#fff;pointer-events:none;text-shadow:0 0 10px rgba(0,0,0,0.8)}
+.cell .signame{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:9px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,0.7);pointer-events:none;text-shadow:0 0 8px rgba(0,0,0,0.9)}
+.cell:hover .label{letter-spacing:7px;transition:all .3s}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:100;display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+#overlay.show{display:flex}
+#overlay .palname{font-size:32px;font-weight:700;letter-spacing:8px;color:#fff;text-transform:uppercase}
+#overlay .siginfo{font-size:11px;letter-spacing:5px;color:rgba(255,255,255,0.6);margin-top:6px;text-transform:uppercase}
+#overlay .close{font-size:9px;letter-spacing:4px;color:rgba(255,255,255,0.5);cursor:pointer;text-transform:uppercase;margin-top:12px;border:0.5px solid rgba(255,255,255,0.3);padding:8px 20px}
+#overlay .close:hover{color:#fff;border-color:#fff}
+</style>
+</head>
+<body>
+<div id="grid"></div>
+<div id="overlay">
+  <canvas id="bigCanvas" width="500" height="500"></canvas>
+  <div style="text-align:center">
+    <div class="palname" id="overlayName"></div>
+    <div class="siginfo" id="overlaySig"></div>
+    <div class="close" onclick="closeOverlay()">✕ chiudi</div>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const PALS=[
+  {name:'CRIMSON', sig:'WAR',
+   bg:0x8a0000, fog:0x5a0000,
+   sphere:new THREE.Color(0.80,0.04,0.04), sphereE:new THREE.Color(0.55,0.0,0.0),
+   c1:0xff2d2d, lA:0xff1111, lB:0x440000},
+  {name:'GOLD', sig:'ECONOMY',
+   bg:0x7fff00, fog:0x55cc00,
+   sphere:new THREE.Color(0.855,0.647,0.125), sphereE:new THREE.Color(0.6,0.45,0.08),
+   c1:0xdaa520, lA:0xdaa520, lB:0x446600},
+  {name:'NEON', sig:'TECH',
+   bg:0x020810, fog:0x041020,
+   sphere:new THREE.Color(0.02,0.28,0.20), sphereE:new THREE.Color(0.0,0.18,0.12),
+   c1:0x00ffcc, lA:0x00ffaa, lB:0x002266},
+  {name:'VIOLET', sig:'POLITICS',
+   bg:0x060010, fog:0x0a001a,
+   sphere:new THREE.Color(0.22,0.04,0.48), sphereE:new THREE.Color(0.14,0.0,0.35),
+   c1:0xcc00ff, lA:0xbb00ff, lB:0xff0088},
+  {name:'YELLOW', sig:'CRISIS',
+   bg:0x1a1500, fog:0x0a0a00,
+   sphere:new THREE.Color(0.70,0.60,0.0), sphereE:new THREE.Color(0.50,0.40,0.0),
+   c1:0xffee00, lA:0xffdd00, lB:0x886600},
+  {name:'GRAY', sig:'HUMAN',
+   bg:0xff8c00, fog:0xcc6600,
+   sphere:new THREE.Color(0.38,0.38,0.38), sphereE:new THREE.Color(0.22,0.22,0.22),
+   c1:0x999999, lA:0xaaaaaa, lB:0x444444},
+];
+
+function makeScene(canvas, P){
+  const W=canvas.clientWidth||canvas.width;
+  const H=canvas.clientHeight||canvas.height;
+  canvas.width=W; canvas.height=H;
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(W,H);
+  renderer.shadowMap.enabled=true;
+
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(P.bg);
+  scene.fog=new THREE.FogExp2(P.fog,0.04);
+
+  const camera=new THREE.PerspectiveCamera(60,W/H,0.01,100);
+  camera.position.set(0,0,7);
+  camera.lookAt(0,0,0);
+
+  const L1=new THREE.SpotLight(P.lA,600,40,0.3,0.4);
+  L1.position.set(5,7,8);scene.add(L1);
+  const L2=new THREE.SpotLight(P.lB,300,30,0.5,0.3);
+  L2.position.set(-5,-4,6);scene.add(L2);
+  scene.add(new THREE.AmbientLight(0x111111));
+
+  const matCore=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.12,metalness:0.05,emissive:P.sphereE,emissiveIntensity:0.5});
+  const matBub=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.10,metalness:0.04,emissive:P.sphereE,emissiveIntensity:0.4});
+
+  const group=new THREE.Group();
+  scene.add(group);
+  group.add(new THREE.Mesh(new THREE.SphereGeometry(1.8,48,36),matCore));
+
+  const blobData=[];
+  for(let i=0;i<120;i++){
+    const phi=Math.acos(1-2*(i+0.5)/120);
+    const theta=Math.PI*(1+Math.sqrt(5))*i;
+    const r=0.03+Math.pow(Math.random(),1.6)*0.32;
+    const dist=1.8+r*0.85;
+    const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),matBub);
+    m.position.set(nx*dist,ny*dist,nz*dist);
+    group.add(m);
+    blobData.push({m,nx,ny,nz,dist,ph:i*0.07,sp:0.3+Math.random()*1.2,amp:0.015+Math.random()*0.04});
+  }
+
+  let t=0;
+  function animate(){
+    requestAnimationFrame(animate);
+    t+=0.012;
+    group.rotation.y=t*0.08;
+    group.rotation.x=Math.sin(t*0.04)*0.05;
+    blobData.forEach(b=>{
+      const pulse=Math.sin(t*b.sp+b.ph)*b.amp;
+      const d=b.dist+pulse;
+      b.m.position.set(b.nx*d,b.ny*d,b.nz*d);
+      b.m.scale.setScalar(1+Math.abs(pulse)*0.8);
+    });
+    L1.intensity=550+Math.sin(t*0.9)*80;
+    renderer.render(scene,camera);
+  }
+  animate();
+}
+
+const grid=document.getElementById('grid');
+const DESC={WAR:'conflitto militare',ECONOMY:'mercati e finanza',TECH:'tecnologia e cyber',POLITICS:'potere e politica',CRISIS:'emergenza sistemica',HUMAN:'storie umane'};
+
+PALS.forEach((P,i)=>{
+  const cell=document.createElement('div');
+  cell.className='cell';
+  const cv=document.createElement('canvas');
+  cv.style.cssText='display:block;width:100%;height:100%';
+  const sig=document.createElement('div');
+  sig.className='signame';
+  sig.textContent=P.sig;
+  const lab=document.createElement('div');
+  lab.className='label';
+  lab.textContent=P.name;
+  cell.appendChild(cv);cell.appendChild(sig);cell.appendChild(lab);
+  cell.onclick=()=>openOverlay(P);
+  grid.appendChild(cell);
+  setTimeout(()=>makeScene(cv,P),i*80);
+});
+
+function openOverlay(P){
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('overlayName').textContent=P.name+' · '+P.sig;
+  document.getElementById('overlaySig').textContent=DESC[P.sig]||'';
+  const cv=document.getElementById('bigCanvas');
+  makeScene(cv,P);
+}
+window.closeOverlay=()=>document.getElementById('overlay').classList.remove('show');
+</script>
+
+<div style="position:fixed;top:16px;right:16px;z-index:200">
+  <button id="recBtn" onclick="startRec()" style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;text-transform:uppercase;padding:8px 16px;border:0.5px solid rgba(255,255,255,0.4);background:rgba(0,0,0,0.7);color:#fff;cursor:pointer">⏺ REC MP4</button>
+</div>
+<script>
+function startRec(){
+  const btn=document.getElementById('recBtn');
+  btn.textContent='⏺ 10s...';
+  btn.style.color='#ff4444';
+  const stream=document.querySelector('canvas')||document.body;
+  const s=document.getElementById('grid').querySelector('canvas');
+  // cattura tutto lo schermo tramite displayMedia non disponibile — usiamo canvas composito
+  // Creiamo un canvas composito di tutti i canvas nella griglia
+  const out=document.createElement('canvas');
+  out.width=window.innerWidth;
+  out.height=window.innerHeight;
+  const ctx=out.getContext('2d');
+  const mediaStream=out.captureStream(30);
+  const rec=new MediaRecorder(mediaStream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:50000000});
+  const chunks=[];
+  rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  rec.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='atelier-palette-'+new Date().toISOString().split('T')[0]+'.webm';
+    a.click();
+    btn.textContent='⏺ REC MP4';
+    btn.style.color='#fff';
+  };
+  // Disegna tutti i canvas nella griglia ogni frame
+  function drawFrame(){
+    ctx.fillStyle='#111';
+    ctx.fillRect(0,0,out.width,out.height);
+    const cells=document.querySelectorAll('.cell canvas');
+    const cols=3,rows=2;
+    const cw=out.width/cols, ch=out.height/rows;
+    cells.forEach((cv,i)=>{
+      const col=i%cols, row=Math.floor(i/cols);
+      try{ctx.drawImage(cv,col*cw,row*ch,cw,ch);}catch(e){}
+    });
+  }
+  rec.start();
+  const interval=setInterval(drawFrame,1000/30);
+  setTimeout(()=>{
+    rec.stop();
+    clearInterval(interval);
+  },10000);
+}
+</script>
+
+<div style="position:fixed;top:16px;right:16px;z-index:200">
+  <button id="recBtn" style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;text-transform:uppercase;padding:8px 18px;border:0.5px solid rgba(255,255,255,0.5);background:rgba(0,0,0,0.8);color:#fff;cursor:pointer" onclick="startRec()">⏺ REC 15s</button>
+</div>
+<script>
+function startRec(){
+  const btn=document.getElementById('recBtn');
+  btn.textContent='⏺ recording...';
+  btn.style.color='#ff4444';
+
+  // Canvas composito 1920x1080
+  const out=document.createElement('canvas');
+  out.width=1920; out.height=1080;
+  const ctx=out.getContext('2d');
+
+  const stream=out.captureStream(30);
+  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:80000000});
+  const chunks=[];
+  rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  rec.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='atelier-palette-'+new Date().toISOString().split('T')[0]+'.webm';
+    a.click();
+    btn.textContent='✅ scaricato!';
+    btn.style.color='#00ff88';
+  };
+
+  rec.start();
+  const cols=3, rows=2;
+  const cw=out.width/cols, ch=out.height/rows;
+
+  function drawFrame(){
+    const cells=document.querySelectorAll('.cell canvas');
+    cells.forEach((cv,i)=>{
+      const col=i%cols, row=Math.floor(i/cols);
+      try{ctx.drawImage(cv,col*cw,row*ch,cw,ch);}catch(e){}
+    });
+  }
+
+  const interval=setInterval(drawFrame,1000/30);
+  setTimeout(()=>{
+    rec.stop();
+    clearInterval(interval);
+  },15000);
+}
+</script>
+</body>
+</html>

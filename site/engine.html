@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PAIN MACHINE — Atelier AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+
+const W = window.innerWidth, H = window.innerHeight;
+const renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setClearColor(0x000000,1);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+
+// CAMERA — vicina, riempie tutto, fissa
+const camera = new THREE.PerspectiveCamera(72, W/H, 0.01, 80);
+camera.position.set(0, 0, 5.5);
+camera.lookAt(0, 0, 0);
+
+// ── LUCI ─────────────────────────────────────────────────────────────
+const Lkey = new THREE.SpotLight(0xffffff, 800, 35, 0.22, 0.12);
+Lkey.position.set(4, 6, 8);
+Lkey.castShadow = true;
+Lkey.shadow.mapSize.set(2048,2048);
+Lkey.shadow.bias = -0.001;
+scene.add(Lkey);
+
+const Lfill = new THREE.SpotLight(0xff1100, 500, 30, 0.35, 0.2);
+Lfill.position.set(-5,-4,5);
+scene.add(Lfill);
+
+const Lrim = new THREE.PointLight(0xffffff, 250, 18);
+Lrim.position.set(0, 5, -3);
+scene.add(Lrim);
+
+const Lred = new THREE.PointLight(0xff0000, 180, 14);
+Lred.position.set(3,-4,2);
+scene.add(Lred);
+
+const Lback = new THREE.PointLight(0x440000, 80, 12);
+Lback.position.set(-3, 3, -4);
+scene.add(Lback);
+
+scene.add(new THREE.AmbientLight(0x020202));
+
+// ── MATERIALI ─────────────────────────────────────────────────────────
+const MAT = {
+  darkRough:  new THREE.MeshStandardMaterial({color:0x050000, roughness:0.95, metalness:0.05}),
+  darkMetal:  new THREE.MeshStandardMaterial({color:0x080000, roughness:0.55, metalness:0.45}),
+  steel:      new THREE.MeshStandardMaterial({color:0xcccccc, roughness:0.06, metalness:0.97}),
+  steelDark:  new THREE.MeshStandardMaterial({color:0x555555, roughness:0.08, metalness:0.95}),
+  steelBright:new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.04, metalness:0.98}),
+  redGlow:    new THREE.MeshStandardMaterial({color:0xff0000, emissive:0xff0000, emissiveIntensity:1.0, roughness:0.02, metalness:0.98}),
+  redDark:    new THREE.MeshStandardMaterial({color:0x880000, roughness:0.25, metalness:0.65}),
+  copper:     new THREE.MeshStandardMaterial({color:0x8b3a10, roughness:0.18, metalness:0.88}),
+  rust:       new THREE.MeshStandardMaterial({color:0x4a1205, roughness:0.82, metalness:0.18}),
+  fluoRed:    new THREE.MeshStandardMaterial({color:0xff4400, emissive:0xff2200, emissiveIntensity:0.85, roughness:0.03, metalness:0.97}),
+  fluoWhite:  new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:0.5, roughness:0.03, metalness:0.97}),
+};
+
+function rMat(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+// struttura totale — tutto è fissato qui, la macchina NON ruota
+const machine = new THREE.Group();
+scene.add(machine);
+
+// ── FOUR-BAR LINKAGE SOLVER ────────────────────────────────────────────
+function fourBar(ox, oy, r1, r2, r3, r4, theta){
+  const Bx = ox + r1*Math.cos(theta);
+  const By = oy + r1*Math.sin(theta);
+  const Dx = ox + r4, Dy = oy;
+  const dx = Dx-Bx, dy = Dy-By;
+  const d = Math.sqrt(dx*dx+dy*dy);
+  if(d > r2+r3 || d < Math.abs(r2-r3)) return null;
+  const a = (r2*r2 - r3*r3 + d*d)/(2*d);
+  const h = Math.sqrt(Math.max(0, r2*r2-a*a));
+  const mx = Bx+a*dx/d, my = By+a*dy/d;
+  return {ox,oy, Bx,By, Cx:mx+h*dy/d, Cy:my-h*dx/d, Dx,Dy};
+}
+
+// ── CORPO PRINCIPALE — denso, rugoso, riempie il frame ─────────────────
+// struttura a griglia che copre tutto il display
+function makeGrid(){
+  const G = new THREE.Group();
+
+  // piastre grandi che coprono il piano
+  const platesH = 8, platesV = 6;
+  const pw = W/H * 5.5 / platesH;
+  const ph = 5.5 / platesV;
+
+  for(let row=0; row<platesV; row++){
+    for(let col=0; col<platesH; col++){
+      const x = (col - platesH/2 + 0.5) * pw;
+      const y = (row - platesV/2 + 0.5) * ph;
+
+      // variazione spessore
+      const thick = 0.04 + Math.random()*0.12;
+      const jitter = 0.02;
+
+      const mats = [MAT.darkRough, MAT.darkMetal, MAT.rust, MAT.redDark];
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(pw*0.92, ph*0.92, thick),
+        mats[Math.floor(Math.random()*mats.length)]
+      );
+      m.position.set(x+(Math.random()-0.5)*jitter, y+(Math.random()-0.5)*jitter, -0.15+thick*0.5);
+      m.rotation.z = (Math.random()-0.5)*0.04;
+      m.castShadow = true; m.receiveShadow = true;
+      G.add(m);
+
+      // bordi/nervature sulle piastre
+      const nerv = new THREE.Mesh(
+        new THREE.BoxGeometry(pw*0.88, 0.012, thick+0.01),
+        Math.random()<0.3 ? MAT.redGlow : MAT.steelDark
+      );
+      nerv.position.set(x, y+(Math.random()-0.5)*ph*0.4, -0.15+thick+0.005);
+      nerv.castShadow = true;
+      G.add(nerv);
+    }
+  }
+  return G;
+}
+machine.add(makeGrid());
+
+// ── STRUTTURA PORTANTE — travi che attraversano tutto ─────────────────
+function makeFrame(){
+  const G = new THREE.Group();
+  const AR = W/H;
+  const FW = 5.0 * AR;
+  const FH = 4.5;
+
+  // travi orizzontali
+  for(let i=0; i<12; i++){
+    const y = -FH/2 + i/(11)*FH;
+    const thick = i%3===0 ? 0.055 : 0.022;
+    const mat = i%5===0 ? MAT.redGlow : i%3===0 ? MAT.steel : MAT.steelDark;
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(FW, thick, 0.06+Math.random()*0.08),
+      mat
+    );
+    bar.position.set(0, y, 0.05+Math.random()*0.1);
+    bar.castShadow = true;
+    G.add(bar);
+  }
+
+  // travi verticali
+  for(let i=0; i<18; i++){
+    const x = -FW/2 + i/17*FW;
+    const thick = i%4===0 ? 0.04 : 0.016;
+    const mat = i%7===0 ? MAT.redGlow : i%4===0 ? MAT.steel : MAT.steelDark;
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(thick, FH, 0.05+Math.random()*0.07),
+      mat
+    );
+    bar.position.set(x, 0, 0.02+Math.random()*0.08);
+    bar.castShadow = true;
+    G.add(bar);
+  }
+
+  // travi diagonali
+  for(let i=0; i<6; i++){
+    const len = 1.5+Math.random()*2;
+    const x = (Math.random()-0.5)*FW*0.8;
+    const y = (Math.random()-0.5)*FH*0.8;
+    const angle = Math.random()*Math.PI;
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(0.025, len, 0.05),
+      Math.random()<0.3 ? MAT.fluoRed : MAT.steelDark
+    );
+    bar.position.set(x,y,0.15+Math.random()*0.2);
+    bar.rotation.z = angle;
+    bar.castShadow = true;
+    G.add(bar);
+  }
+
+  return G;
+}
+machine.add(makeFrame());
+
+// ── SISTEMI FOUR-BAR — cinematica reale ───────────────────────────────
+const linkSystems = [];
+const nSystems = 32;
+const AR = W/H;
+
+for(let li=0; li<nSystems; li++){
+  const phi = Math.acos(1-2*(li+0.5)/nSystems);
+  const theta = 2.399963*li;
+
+  // distribuisci in tutto il display
+  const ox = Math.cos(theta*0.8) * AR * 2.2 * (0.3+Math.random()*0.7);
+  const oy = Math.sin(phi) * 1.8 * (0.3+Math.random()*0.7);
+  const oz = 0.2 + Math.random()*0.6;
+
+  const r1 = 0.25+Math.random()*0.55;
+  const r2 = r1*(0.35+Math.random()*0.35);
+  const r3 = r1*(0.8+Math.random()*0.6);
+  const r4 = r1*(0.6+Math.random()*0.5);
+  const speed = (0.3+Math.random()*1.2) * (Math.random()<0.5?1:-1);
+  const phase = Math.random()*Math.PI*2;
+
+  const g = new THREE.Group();
+  g.position.set(ox, oy, oz);
+  machine.add(g);
+
+  // LAME — non cilindri
+  const isRed = Math.random()<0.28;
+  const isBright = Math.random()<0.2;
+
+  const crankMat = isRed ? MAT.redGlow : isBright ? MAT.steelBright : MAT.steel;
+  const connMat = Math.random()<0.2 ? MAT.fluoRed : MAT.steelDark;
+  const outMat = isRed ? MAT.redDark : MAT.copper;
+
+  // manovella — lama affilata
+  const crankW = 0.008+Math.random()*0.016;
+  const crankD = 0.05+Math.random()*0.18;
+  const crankMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(crankW, r2, crankD),
+    crankMat
+  );
+  crankMesh.castShadow = true; g.add(crankMesh);
+
+  // biella
+  const connW = 0.006+Math.random()*0.01;
+  const connD = 0.04+Math.random()*0.12;
+  const connMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(connW, r3, connD),
+    connMat
+  );
+  connMesh.castShadow = true; g.add(connMesh);
+
+  // bilanciere
+  const outW = 0.007+Math.random()*0.012;
+  const outD = 0.05+Math.random()*0.14;
+  const outMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(outW, r4, outD),
+    outMat
+  );
+  outMesh.castShadow = true; g.add(outMesh);
+
+  // giunti sferici
+  const jSz = 0.016+Math.random()*0.022;
+  const jA = new THREE.Mesh(new THREE.SphereGeometry(jSz,8,6), MAT.steel);
+  const jB = new THREE.Mesh(new THREE.SphereGeometry(jSz,8,6), MAT.steelDark);
+  const jC = new THREE.Mesh(new THREE.SphereGeometry(jSz*1.3,8,6), isRed?MAT.redGlow:MAT.steelBright);
+  const jD = new THREE.Mesh(new THREE.SphereGeometry(jSz,8,6), isRed?MAT.redDark:MAT.steel);
+  [jA,jB,jC,jD].forEach(j=>{j.castShadow=true; g.add(j);});
+
+  // CUSPIDI sul punto C — si muovono con la manovella
+  const spikes = [];
+  const nSpikes = 2+Math.floor(Math.random()*6);
+  for(let s=0; s<nSpikes; s++){
+    const sLen = 0.06+Math.random()*0.5;
+    const sR = 0.004+Math.random()*0.014;
+    const sMat = Math.random()<0.4 ? MAT.redGlow : s%2===0 ? MAT.steelBright : MAT.steelDark;
+    const sm = new THREE.Mesh(new THREE.ConeGeometry(sR,sLen,4), sMat);
+    sm.castShadow = true; g.add(sm);
+    spikes.push({m:sm, len:sLen, ang:s/nSpikes*Math.PI*2, r:0.02+Math.random()*0.06});
+  }
+
+  linkSystems.push({g, crankMesh, connMesh, outMesh, jA,jB,jC,jD, spikes,
+    ox:0, oy:0, r1, r2, r3, r4, speed, phase});
+}
+
+// ── CRESTE/LAME — distese su tutto il display ──────────────────────────
+const crests = [];
+
+// zone di creste — come i tasti del pianoforte ma lame
+const nZones = 8;
+for(let z=0; z<nZones; z++){
+  const zx = (z/nZones - 0.5) * AR * 5;
+  const zy = (Math.random()-0.5)*3.5;
+  const zRot = (Math.random()-0.5)*0.4;
+
+  const nLocal = 18+Math.floor(Math.random()*22);
+  for(let i=0; i<nLocal; i++){
+    const baseH = 0.04+Math.pow(Math.abs(Math.sin(i/nLocal*Math.PI*6)),0.4)*(0.5+Math.random()*1.2);
+    const spacing = (0.18+Math.random()*0.12);
+    const lx = zx + (i-nLocal/2)*spacing;
+    const ly = zy + (Math.random()-0.5)*0.12;
+
+    const isLama = Math.random()<0.6;
+    const isRed = Math.random()<0.22;
+    const isBright = Math.random()<0.15;
+
+    const lW = 0.008+Math.random()*0.02;
+    const lD = isLama ? (0.04+Math.random()*0.22) : lW*1.5;
+
+    const mat = isRed ? MAT.redGlow : isBright ? MAT.steelBright :
+                Math.random()<0.4 ? MAT.steel : MAT.darkRough;
+
+    const geo = isLama ?
+      new THREE.BoxGeometry(lW, baseH, lD) :
+      new THREE.ConeGeometry(lW, baseH, 4);
+
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(lx, ly + baseH*0.5, 0.25+Math.random()*0.4);
+    m.rotation.z = zRot + (Math.random()-0.5)*0.08;
+    m.castShadow = true;
+    machine.add(m);
+
+    crests.push({
+      m,
+      baseY: ly,
+      baseH,
+      ph: i*0.14 + z*0.8 + Math.random()*6.28,
+      sp: 0.5+Math.random()*2.8,
+      amp: 0.6+Math.random()*3.0,
+    });
+  }
+}
+
+// ── PISTONI VERTICALI — si muovono su asse Y ───────────────────────────
+const pistons = [];
+const nPist = 40;
+for(let i=0; i<nPist; i++){
+  const px = (Math.random()-0.5)*AR*5;
+  const py = (Math.random()-0.5)*3.8;
+  const r = 0.025+Math.random()*0.055;
+  const len = 0.3+Math.random()*1.2;
+  const isRed = Math.random()<0.25;
+
+  // corpo esterno
+  const outer = new THREE.Mesh(
+    new THREE.CylinderGeometry(r*1.4, r*1.4, len*0.55, 10),
+    MAT.darkMetal
+  );
+  outer.position.set(px, py+len*0.28, 0.3+Math.random()*0.5);
+  outer.castShadow=true; machine.add(outer);
+
+  // stelo
+  const inner = new THREE.Mesh(
+    new THREE.CylinderGeometry(r*0.8, r*0.8, len, 8),
+    isRed ? MAT.redDark : MAT.steel
+  );
+  inner.position.set(px, py, 0.3+Math.random()*0.5);
+  inner.castShadow=true; machine.add(inner);
+
+  // testa
+  const head = new THREE.Mesh(
+    new THREE.CylinderGeometry(r*1.3, r*1.3, r*0.8, 10),
+    isRed ? MAT.redGlow : MAT.steelBright
+  );
+  head.castShadow=true; machine.add(head);
+
+  pistons.push({outer, inner, head, baseY:py, len, r, isRed,
+    ph:Math.random()*6.28, sp:0.4+Math.random()*2.0});
+}
+
+// ── MICRO DETTAGLI — bulloni, rivetti, sporgenze ──────────────────────
+for(let i=0; i<600; i++){
+  const px = (Math.random()-0.5)*AR*5.5;
+  const py = (Math.random()-0.5)*4.8;
+  const pz = 0.12+Math.random()*0.55;
+
+  const type = Math.floor(Math.random()*4);
+  let geo, mat;
+
+  if(type===0){
+    // bullone
+    geo = new THREE.CylinderGeometry(0.018+Math.random()*0.02, 0.018+Math.random()*0.02, 0.05, 6);
+    mat = MAT.steel;
+  } else if(type===1){
+    // lama piccola
+    const l = 0.04+Math.random()*0.35;
+    geo = new THREE.BoxGeometry(0.005+Math.random()*0.012, l, 0.02+Math.random()*0.08);
+    mat = Math.random()<0.3 ? MAT.redGlow : MAT.steelDark;
+  } else if(type===2){
+    // cono piccolo
+    const l = 0.03+Math.random()*0.25;
+    geo = new THREE.ConeGeometry(0.005+Math.random()*0.014, l, 4);
+    mat = Math.random()<0.25 ? MAT.redGlow : Math.random()<0.4 ? MAT.steelBright : MAT.darkRough;
+  } else {
+    // piastrella
+    geo = new THREE.BoxGeometry(0.02+Math.random()*0.12, 0.02+Math.random()*0.12, 0.006+Math.random()*0.018);
+    mat = Math.random()<0.2 ? MAT.rust : MAT.darkMetal;
+  }
+
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(px, py, pz);
+  m.rotation.set(Math.random()*6.28, Math.random()*6.28, Math.random()*6.28);
+  m.castShadow = true;
+  machine.add(m);
+}
+
+// ── GRANDI LAME AFFILATE LIBERE ────────────────────────────────────────
+const bigBlades = [];
+const nBlades = 18;
+for(let i=0; i<nBlades; i++){
+  const len = 1.0+Math.random()*2.5;
+  const w = 0.012+Math.random()*0.03;
+  const d = 0.08+Math.random()*0.4;
+  const isRed = Math.random()<0.35;
+  const isBright = Math.random()<0.2;
+
+  const mat = isRed ? MAT.redGlow : isBright ? MAT.steelBright : MAT.steel;
+
+  // forma lama — con bordo tagliente
+  const shape = new THREE.Shape();
+  shape.moveTo(-w/2, -len/2);
+  shape.lineTo( w/2, -len/2);
+  shape.lineTo( w/4,  len/2);
+  shape.lineTo(-w/4,  len/2);
+  shape.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(shape, {depth:d, bevelEnabled:true, bevelSize:0.003, bevelThickness:0.003, bevelSegments:1});
+  const m = new THREE.Mesh(geo, mat);
+
+  const bx = (Math.random()-0.5)*AR*4.5;
+  const by = (Math.random()-0.5)*3.5;
+  const bz = 0.3+Math.random()*0.8;
+  m.position.set(bx, by, bz);
+  m.rotation.z = Math.random()*Math.PI*2;
+  m.castShadow = true;
+  machine.add(m);
+
+  bigBlades.push({
+    m,
+    ox:bx, oy:by, oz:bz,
+    ph: Math.random()*6.28,
+    sp: 0.3+Math.random()*1.2,
+    rotSp: (Math.random()-0.5)*0.025,
+    ampX: 0.08+Math.random()*0.3,
+    ampY: 0.06+Math.random()*0.25,
+  });
+}
+
+// ── SCANLINE OVERLAY (non Three.js, canvas 2D sopra) ──────────────────
+// già fatto internamente
+
+// ── CAMBIO COLORE LUCI ────────────────────────────────────────────────
+let colorT = 0, colorNext = 10+Math.random()*8, colorState = 0;
+const colorStates = [
+  {lkey:0xffffff, lfill:0xff0000, lrim:0xffffff, lred:0xff0000},
+  {lkey:0xffffff, lfill:0xff4400, lrim:0xffddaa, lred:0xff2200},
+  {lkey:0xaabbff, lfill:0x2244ff, lrim:0x8899ff, lred:0x4466ff},
+  {lkey:0xffeeaa, lfill:0xffcc00, lrim:0xffffff, lred:0xff8800},
+  {lkey:0xffffff, lfill:0xff0000, lrim:0x00ffaa, lred:0xff0000},
+];
+function switchColor(){
+  colorState = (colorState+1)%colorStates.length;
+  const s = colorStates[colorState];
+  Lkey.color.set(s.lkey);
+  Lfill.color.set(s.lfill);
+  Lrim.color.set(s.lrim);
+  Lred.color.set(s.lred);
+  colorT = 0;
+  colorNext = 7+Math.random()*11;
+}
+
+// ── LOOP ───────────────────────────────────────────────────────────────
+let t = 0;
+function animate(){
+  requestAnimationFrame(animate);
+  t += 0.016;
+  colorT += 0.016;
+  if(colorT > colorNext) switchColor();
+
+  // FOUR-BAR LINKAGE — cinematica reale
+  linkSystems.forEach((lk, li)=>{
+    const theta = t*lk.speed + lk.phase;
+    const fb = fourBar(lk.ox, lk.oy, lk.r1, lk.r2, lk.r3, lk.r4, theta);
+    if(!fb) return;
+
+    // manovella A->B
+    const crankLen = lk.r1;
+    lk.crankMesh.position.set((fb.ox+fb.Bx)/2, (fb.oy+fb.By)/2, 0);
+    lk.crankMesh.rotation.z = Math.atan2(fb.By-fb.oy, fb.Bx-fb.ox)+Math.PI/2;
+    lk.crankMesh.scale.y = crankLen;
+
+    // biella B->C
+    const cLen = Math.hypot(fb.Cx-fb.Bx, fb.Cy-fb.By);
+    lk.connMesh.position.set((fb.Bx+fb.Cx)/2, (fb.By+fb.Cy)/2, 0);
+    lk.connMesh.rotation.z = Math.atan2(fb.Cy-fb.By, fb.Cx-fb.Bx)+Math.PI/2;
+    lk.connMesh.scale.y = Math.max(0.01, cLen);
+
+    // bilanciere C->D
+    const oLen = Math.hypot(fb.Dx-fb.Cx, fb.Dy-fb.Cy);
+    lk.outMesh.position.set((fb.Cx+fb.Dx)/2, (fb.Cy+fb.Dy)/2, 0);
+    lk.outMesh.rotation.z = Math.atan2(fb.Dy-fb.Cy, fb.Dx-fb.Cx)+Math.PI/2;
+    lk.outMesh.scale.y = Math.max(0.01, oLen);
+
+    lk.jA.position.set(fb.ox, fb.oy, 0);
+    lk.jB.position.set(fb.Bx, fb.By, 0);
+    lk.jC.position.set(fb.Cx, fb.Cy, 0);
+    lk.jD.position.set(fb.Dx, fb.Dy, 0);
+
+    // cuspidi sul punto B — tracciano ellissi
+    lk.spikes.forEach((s,si)=>{
+      const ang = Math.atan2(fb.By-fb.oy, fb.Bx-fb.ox) + s.ang;
+      s.m.position.set(fb.Bx+Math.cos(ang)*s.r, fb.By+Math.sin(ang)*s.r, (si-lk.spikes.length/2)*0.03);
+      s.m.rotation.z = ang+Math.PI/2;
+      s.m.scale.y = Math.max(0.1, 0.4+Math.abs(Math.sin(t*1.8+si+li*0.3))*1.2);
+    });
+  });
+
+  // CRESTE — si alzano e abbassano come pistoni con movimento ellittico
+  crests.forEach(c=>{
+    const v = Math.abs(Math.sin(t*c.sp + c.ph));
+    const sc = Math.max(0.05, 0.15 + v*c.amp);
+    c.m.scale.y = sc;
+    // offset verticale basato sulla scala
+    const base = c.m.position;
+    base.y = c.baseY + c.baseH*sc*0.5;
+    if(c.m.material.emissiveIntensity !== undefined && c.m.material.emissiveIntensity > 0)
+      c.m.material.emissiveIntensity = 0.7+Math.sin(t*3+c.ph)*0.3;
+  });
+
+  // PISTONI
+  pistons.forEach(p=>{
+    const stroke = Math.sin(t*p.sp + p.ph);
+    const dy = stroke*p.len*0.35;
+    p.inner.position.y = p.baseY + dy;
+    p.head.position.set(p.inner.position.x, p.baseY+dy+p.len*0.5, p.inner.position.z);
+    p.outer.position.y = p.baseY + p.len*0.28 + dy*0.1;
+    if(p.isRed) p.inner.material.emissiveIntensity = 0.4+Math.abs(stroke)*0.6;
+  });
+
+  // GRANDI LAME — movimento ellittico
+  bigBlades.forEach(b=>{
+    b.m.rotation.z += b.rotSp;
+    b.m.position.x = b.ox + Math.sin(t*b.sp+b.ph)*b.ampX;
+    b.m.position.y = b.oy + Math.cos(t*b.sp*0.7+b.ph+1)*b.ampY;
+  });
+
+  // LUCI animate — ombre continue sul corpo
+  Lkey.position.set(4+Math.sin(t*0.12)*2, 6+Math.cos(t*0.09)*1.5, 8);
+  Lkey.intensity = 700+Math.sin(t*1.1)*180;
+  Lfill.position.set(-5+Math.cos(t*0.1)*2, -4+Math.sin(t*0.08)*1.5, 5);
+  Lfill.intensity = 450+Math.cos(t*0.9)*100;
+  Lrim.position.set(Math.sin(t*0.07)*2, 5+Math.cos(t*0.06)*1, -3);
+  Lred.position.set(3+Math.sin(t*0.09)*1.5, -4+Math.cos(t*0.07)*1, 2);
+
+  // macchina STABILE — solo micro respiro
+  machine.rotation.x = Math.sin(t*0.04)*0.018;
+  machine.rotation.y = Math.cos(t*0.035)*0.022;
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
+ENDOFFILE
+echo "OK: $(wc -c < /mnt/user-data/outputs/pain_machine.html) bytes""
+    },
+    "message": "Write complete pain machine - stable structure, internal movement, dense, full display",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "context": null,
+    "display_content": {
+      "type": "json_block",
+      "json_block": "{"language": "bash", "code": "cat > /mnt/user-data/outputs/pain_machine.html << 'ENDOFFILE'\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<title>PAIN MACHINE \u2014 Atelier AI</title>\n<style>\n*{margin:0;padding:0;box-sizing:border-box}\nhtml,body{width:100%;height:100%;background:#000;overflow:hidden}\ncanvas{display:block;width:100vw;height:100vh}\n</style>\n</head>\n<body>\n<canvas id="c"></canvas>\n<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>\n\n\nconst W = window.innerWidth, H = window.innerHeight;\nconst renderer = new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,preserveDrawingBuffer:true});\nrenderer.setSize(W,H);\nrenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));\nrenderer.setClearColor(0x000000,1);\nrenderer.shadowMap.enabled = true;\nrenderer.shadowMap.type = THREE.PCFSoftShadowMap;\n\nconst scene = new THREE.Scene();\n\n// CAMERA \u2014 vicina, riempie tutto, fissa\nconst camera = new THREE.PerspectiveCamera(72, W/H, 0.01, 80);\ncamera.position.set(0, 0, 5.5);\ncamera.lookAt(0, 0, 0);\n\n// \u2500\u2500 LUCI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst Lkey = new THREE.SpotLight(0xffffff, 800, 35, 0.22, 0.12);\nLkey.position.set(4, 6, 8);\nLkey.castShadow = true;\nLkey.shadow.mapSize.set(2048,2048);\nLkey.shadow.bias = -0.001;\nscene.add(Lkey);\n\nconst Lfill = new THREE.SpotLight(0xff1100, 500, 30, 0.35, 0.2);\nLfill.position.set(-5,-4,5);\nscene.add(Lfill);\n\nconst Lrim = new THREE.PointLight(0xffffff, 250, 18);\nLrim.position.set(0, 5, -3);\nscene.add(Lrim);\n\nconst Lred = new THREE.PointLight(0xff0000, 180, 14);\nLred.position.set(3,-4,2);\nscene.add(Lred);\n\nconst Lback = new THREE.PointLight(0x440000, 80, 12);\nLback.position.set(-3, 3, -4);\nscene.add(Lback);\n\nscene.add(new THREE.AmbientLight(0x020202));\n\n// \u2500\u2500 MATERIALI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst MAT = {\n  darkRough:  new THREE.MeshStandardMaterial({color:0x050000, roughness:0.95, metalness:0.05}),\n  darkMetal:  new THREE.MeshStandardMaterial({color:0x080000, roughness:0.55, metalness:0.45}),\n  steel:      new THREE.MeshStandardMaterial({color:0xcccccc, roughness:0.06, metalness:0.97}),\n  steelDark:  new THREE.MeshStandardMaterial({color:0x555555, roughness:0.08, metalness:0.95}),\n  steelBright:new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.04, metalness:0.98}),\n  redGlow:    new THREE.MeshStandardMaterial({color:0xff0000, emissive:0xff0000, emissiveIntensity:1.0, roughness:0.02, metalness:0.98}),\n  redDark:    new THREE.MeshStandardMaterial({color:0x880000, roughness:0.25, metalness:0.65}),\n  copper:     new THREE.MeshStandardMaterial({color:0x8b3a10, roughness:0.18, metalness:0.88}),\n  rust:       new THREE.MeshStandardMaterial({color:0x4a1205, roughness:0.82, metalness:0.18}),\n  fluoRed:    new THREE.MeshStandardMaterial({color:0xff4400, emissive:0xff2200, emissiveIntensity:0.85, roughness:0.03, metalness:0.97}),\n  fluoWhite:  new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:0.5, roughness:0.03, metalness:0.97}),\n};\n\nfunction rMat(arr){ return arr[Math.floor(Math.random()*arr.length)]; }\n\n// struttura totale \u2014 tutto \u00e8 fissato qui, la macchina NON ruota\nconst machine = new THREE.Group();\nscene.add(machine);\n\n// \u2500\u2500 FOUR-BAR LINKAGE SOLVER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction fourBar(ox, oy, r1, r2, r3, r4, theta){\n  const Bx = ox + r1*Math.cos(theta);\n  const By = oy + r1*Math.sin(theta);\n  const Dx = ox + r4, Dy = oy;\n  const dx = Dx-Bx, dy = Dy-By;\n  const d = Math.sqrt(dx*dx+dy*dy);\n  if(d > r2+r3 || d < Math.abs(r2-r3)) return null;\n  const a = (r2*r2 - r3*r3 + d*d)/(2*d);\n  const h = Math.sqrt(Math.max(0, r2*r2-a*a));\n  const mx = Bx+a*dx/d, my = By+a*dy/d;\n  return {ox,oy, Bx,By, Cx:mx+h*dy/d, Cy:my-h*dx/d, Dx,Dy};\n}\n\n// \u2500\u2500 CORPO PRINCIPALE \u2014 denso, rugoso, riempie il frame \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// struttura a griglia che copre tutto il display\nfunction makeGrid(){\n  const G = new THREE.Group();\n\n  // piastre grandi che coprono il piano\n  const platesH = 8, platesV = 6;\n  const pw = W/H * 5.5 / platesH;\n  const ph = 5.5 / platesV;\n\n  for(let row=0; row<platesV; row++){\n    for(let col=0; col<platesH; col++){\n      const x = (col - platesH/2 + 0.5) * pw;\n      const y = (row - platesV/2 + 0.5) * ph;\n\n      // variazione spessore\n      const thick = 0.04 + Math.random()*0.12;\n      const jitter = 0.02;\n\n      const mats = [MAT.darkRough, MAT.darkMetal, MAT.rust, MAT.redDark];\n      const m = new THREE.Mesh(\n        new THREE.BoxGeometry(pw*0.92, ph*0.92, thick),\n        mats[Math.floor(Math.random()*mats.length)]\n      );\n      m.position.set(x+(Math.random()-0.5)*jitter, y+(Math.random()-0.5)*jitter, -0.15+thick*0.5);\n      m.rotation.z = (Math.random()-0.5)*0.04;\n      m.castShadow = true; m.receiveShadow = true;\n      G.add(m);\n\n      // bordi/nervature sulle piastre\n      const nerv = new THREE.Mesh(\n        new THREE.BoxGeometry(pw*0.88, 0.012, thick+0.01),\n        Math.random()<0.3 ? MAT.redGlow : MAT.steelDark\n      );\n      nerv.position.set(x, y+(Math.random()-0.5)*ph*0.4, -0.15+thick+0.005);\n      nerv.castShadow = true;\n      G.add(nerv);\n    }\n  }\n  return G;\n}\nmachine.add(makeGrid());\n\n// \u2500\u2500 STRUTTURA PORTANTE \u2014 travi che attraversano tutto \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction makeFrame(){\n  const G = new THREE.Group();\n  const AR = W/H;\n  const FW = 5.0 * AR;\n  const FH = 4.5;\n\n  // travi orizzontali\n  for(let i=0; i<12; i++){\n    const y = -FH/2 + i/(11)*FH;\n    const thick = i%3===0 ? 0.055 : 0.022;\n    const mat = i%5===0 ? MAT.redGlow : i%3===0 ? MAT.steel : MAT.steelDark;\n    const bar = new THREE.Mesh(\n      new THREE.BoxGeometry(FW, thick, 0.06+Math.random()*0.08),\n      mat\n    );\n    bar.position.set(0, y, 0.05+Math.random()*0.1);\n    bar.castShadow = true;\n    G.add(bar);\n  }\n\n  // travi verticali\n  for(let i=0; i<18; i++){\n    const x = -FW/2 + i/17*FW;\n    const thick = i%4===0 ? 0.04 : 0.016;\n    const mat = i%7===0 ? MAT.redGlow : i%4===0 ? MAT.steel : MAT.steelDark;\n    const bar = new THREE.Mesh(\n      new THREE.BoxGeometry(thick, FH, 0.05+Math.random()*0.07),\n      mat\n    );\n    bar.position.set(x, 0, 0.02+Math.random()*0.08);\n    bar.castShadow = true;\n    G.add(bar);\n  }\n\n  // travi diagonali\n  for(let i=0; i<6; i++){\n    const len = 1.5+Math.random()*2;\n    const x = (Math.random()-0.5)*FW*0.8;\n    const y = (Math.random()-0.5)*FH*0.8;\n    const angle = Math.random()*Math.PI;\n    const bar = new THREE.Mesh(\n      new THREE.BoxGeometry(0.025, len, 0.05),\n      Math.random()<0.3 ? MAT.fluoRed : MAT.steelDark\n    );\n    bar.position.set(x,y,0.15+Math.random()*0.2);\n    bar.rotation.z = angle;\n    bar.castShadow = true;\n    G.add(bar);\n  }\n\n  return G;\n}\nmachine.add(makeFrame());\n\n// \u2500\u2500 SISTEMI FOUR-BAR \u2014 cinematica reale \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst linkSystems = [];\nconst nSystems = 32;\nconst AR = W/H;\n\nfor(let li=0; li<nSystems; li++){\n  const phi = Math.acos(1-2*(li+0.5)/nSystems);\n  const theta = 2.399963*li;\n\n  // distribuisci in tutto il display\n  const ox = Math.cos(theta*0.8) * AR * 2.2 * (0.3+Math.random()*0.7);\n  const oy = Math.sin(phi) * 1.8 * (0.3+Math.random()*0.7);\n  const oz = 0.2 + Math.random()*0.6;\n\n  const r1 = 0.25+Math.random()*0.55;\n  const r2 = r1*(0.35+Math.random()*0.35);\n  const r3 = r1*(0.8+Math.random()*0.6);\n  const r4 = r1*(0.6+Math.random()*0.5);\n  const speed = (0.3+Math.random()*1.2) * (Math.random()<0.5?1:-1);\n  const phase = Math.random()*Math.PI*2;\n\n  const g = new THREE.Group();\n  g.position.set(ox, oy, oz);\n  machine.add(g);\n\n  // LAME \u2014 non cilindri\n  const isRed = Math.random()<0.28;\n  const isBright = Math.random()<0.2;\n\n  const crankMat = isRed ? MAT.redGlow : isBright ? MAT.steelBright : MAT.steel;\n  const connMat = Math.random()<0.2 ? MAT.fluoRed : MAT.steelDark;\n  const outMat = isRed ? MAT.redDark : MAT.copper;\n\n  // manovella \u2014 lama affilata\n  const crankW = 0.008+Math.random()*0.016;\n  const crankD = 0.05+Math.random()*0.18;\n  const crankMesh = new THREE.Mesh(\n    new THREE.BoxGeometry(crankW, r2, crankD),\n    crankMat\n  );\n  crankMesh.castShadow = true; g.add(crankMesh);\n\n  // biella\n  const connW = 0.006+Math.random()*0.01;\n  const connD = 0.04+Math.random()*0.12;\n  const connMesh = new THREE.Mesh(\n    new THREE.BoxGeometry(connW, r3, connD),\n    connMat\n  );\n  connMesh.castShadow = true; g.add(connMesh);\n\n  // bilanciere\n  const outW = 0.007+Math.random()*0.012;\n  const outD = 0.05+Math.random()*0.14;\n  const outMesh = new THREE.Mesh(\n    new THREE.BoxGeometry(outW, r4, outD),\n    outMat\n  );\n  outMesh.castShadow = true; g.add(outMesh);\n\n  // giunti sferici\n  const jSz = 0.016+Math.random()*0.022;\n  const jA = new THREE.Mesh(new THREE.SphereGeometry(jSz,8,6), MAT.steel);\n  const jB = new THREE.Mesh(new THREE.SphereGeometry(jSz,8,6), MAT.steelDark);\n  const jC = new THREE.Mesh(new THREE.SphereGeometry(jSz*1.3,8,6), isRed?MAT.redGlow:MAT.steelBright);\n  const jD = new THREE.Mesh(new THREE.SphereGeometry(jSz,8,6), isRed?MAT.redDark:MAT.steel);\n  [jA,jB,jC,jD].forEach(j=>{j.castShadow=true; g.add(j);});\n\n  // CUSPIDI sul punto C \u2014 si muovono con la manovella\n  const spikes = [];\n  const nSpikes = 2+Math.floor(Math.random()*6);\n  for(let s=0; s<nSpikes; s++){\n    const sLen = 0.06+Math.random()*0.5;\n    const sR = 0.004+Math.random()*0.014;\n    const sMat = Math.random()<0.4 ? MAT.redGlow : s%2===0 ? MAT.steelBright : MAT.steelDark;\n    const sm = new THREE.Mesh(new THREE.ConeGeometry(sR,sLen,4), sMat);\n    sm.castShadow = true; g.add(sm);\n    spikes.push({m:sm, len:sLen, ang:s/nSpikes*Math.PI*2, r:0.02+Math.random()*0.06});\n  }\n\n  linkSystems.push({g, crankMesh, connMesh, outMesh, jA,jB,jC,jD, spikes,\n    ox:0, oy:0, r1, r2, r3, r4, speed, phase});\n}\n\n// \u2500\u2500 CRESTE/LAME \u2014 distese su tutto il display \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst crests = [];\n\n// zone di creste \u2014 come i tasti del pianoforte ma lame\nconst nZones = 8;\nfor(let z=0; z<nZones; z++){\n  const zx = (z/nZones - 0.5) * AR * 5;\n  const zy = (Math.random()-0.5)*3.5;\n  const zRot = (Math.random()-0.5)*0.4;\n\n  const nLocal = 18+Math.floor(Math.random()*22);\n  for(let i=0; i<nLocal; i++){\n    const baseH = 0.04+Math.pow(Math.abs(Math.sin(i/nLocal*Math.PI*6)),0.4)*(0.5+Math.random()*1.2);\n    const spacing = (0.18+Math.random()*0.12);\n    const lx = zx + (i-nLocal/2)*spacing;\n    const ly = zy + (Math.random()-0.5)*0.12;\n\n    const isLama = Math.random()<0.6;\n    const isRed = Math.random()<0.22;\n    const isBright = Math.random()<0.15;\n\n    const lW = 0.008+Math.random()*0.02;\n    const lD = isLama ? (0.04+Math.random()*0.22) : lW*1.5;\n\n    const mat = isRed ? MAT.redGlow : isBright ? MAT.steelBright :\n                Math.random()<0.4 ? MAT.steel : MAT.darkRough;\n\n    const geo = isLama ?\n      new THREE.BoxGeometry(lW, baseH, lD) :\n      new THREE.ConeGeometry(lW, baseH, 4);\n\n    const m = new THREE.Mesh(geo, mat);\n    m.position.set(lx, ly + baseH*0.5, 0.25+Math.random()*0.4);\n    m.rotation.z = zRot + (Math.random()-0.5)*0.08;\n    m.castShadow = true;\n    machine.add(m);\n\n    crests.push({\n      m,\n      baseY: ly,\n      baseH,\n      ph: i*0.14 + z*0.8 + Math.random()*6.28,\n      sp: 0.5+Math.random()*2.8,\n      amp: 0.6+Math.random()*3.0,\n    });\n  }\n}\n\n// \u2500\u2500 PISTONI VERTICALI \u2014 si muovono su asse Y \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst pistons = [];\nconst nPist = 40;\nfor(let i=0; i<nPist; i++){\n  const px = (Math.random()-0.5)*AR*5;\n  const py = (Math.random()-0.5)*3.8;\n  const r = 0.025+Math.random()*0.055;\n  const len = 0.3+Math.random()*1.2;\n  const isRed = Math.random()<0.25;\n\n  // corpo esterno\n  const outer = new THREE.Mesh(\n    new THREE.CylinderGeometry(r*1.4, r*1.4, len*0.55, 10),\n    MAT.darkMetal\n  );\n  outer.position.set(px, py+len*0.28, 0.3+Math.random()*0.5);\n  outer.castShadow=true; machine.add(outer);\n\n  // stelo\n  const inner = new THREE.Mesh(\n    new THREE.CylinderGeometry(r*0.8, r*0.8, len, 8),\n    isRed ? MAT.redDark : MAT.steel\n  );\n  inner.position.set(px, py, 0.3+Math.random()*0.5);\n  inner.castShadow=true; machine.add(inner);\n\n  // testa\n  const head = new THREE.Mesh(\n    new THREE.CylinderGeometry(r*1.3, r*1.3, r*0.8, 10),\n    isRed ? MAT.redGlow : MAT.steelBright\n  );\n  head.castShadow=true; machine.add(head);\n\n  pistons.push({outer, inner, head, baseY:py, len, r, isRed,\n    ph:Math.random()*6.28, sp:0.4+Math.random()*2.0});\n}\n\n// \u2500\u2500 MICRO DETTAGLI \u2014 bulloni, rivetti, sporgenze \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfor(let i=0; i<600; i++){\n  const px = (Math.random()-0.5)*AR*5.5;\n  const py = (Math.random()-0.5)*4.8;\n  const pz = 0.12+Math.random()*0.55;\n\n  const type = Math.floor(Math.random()*4);\n  let geo, mat;\n\n  if(type===0){\n    // bullone\n    geo = new THREE.CylinderGeometry(0.018+Math.random()*0.02, 0.018+Math.random()*0.02, 0.05, 6);\n    mat = MAT.steel;\n  } else if(type===1){\n    // lama piccola\n    const l = 0.04+Math.random()*0.35;\n    geo = new THREE.BoxGeometry(0.005+Math.random()*0.012, l, 0.02+Math.random()*0.08);\n    mat = Math.random()<0.3 ? MAT.redGlow : MAT.steelDark;\n  } else if(type===2){\n    // cono piccolo\n    const l = 0.03+Math.random()*0.25;\n    geo = new THREE.ConeGeometry(0.005+Math.random()*0.014, l, 4);\n    mat = Math.random()<0.25 ? MAT.redGlow : Math.random()<0.4 ? MAT.steelBright : MAT.darkRough;\n  } else {\n    // piastrella\n    geo = new THREE.BoxGeometry(0.02+Math.random()*0.12, 0.02+Math.random()*0.12, 0.006+Math.random()*0.018);\n    mat = Math.random()<0.2 ? MAT.rust : MAT.darkMetal;\n  }\n\n  const m = new THREE.Mesh(geo, mat);\n  m.position.set(px, py, pz);\n  m.rotation.set(Math.random()*6.28, Math.random()*6.28, Math.random()*6.28);\n  m.castShadow = true;\n  machine.add(m);\n}\n\n// \u2500\u2500 GRANDI LAME AFFILATE LIBERE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst bigBlades = [];\nconst nBlades = 18;\nfor(let i=0; i<nBlades; i++){\n  const len = 1.0+Math.random()*2.5;\n  const w = 0.012+Math.random()*0.03;\n  const d = 0.08+Math.random()*0.4;\n  const isRed = Math.random()<0.35;\n  const isBright = Math.random()<0.2;\n\n  const mat = isRed ? MAT.redGlow : isBright ? MAT.steelBright : MAT.steel;\n\n  // forma lama \u2014 con bordo tagliente\n  const shape = new THREE.Shape();\n  shape.moveTo(-w/2, -len/2);\n  shape.lineTo( w/2, -len/2);\n  shape.lineTo( w/4,  len/2);\n  shape.lineTo(-w/4,  len/2);\n  shape.closePath();\n\n  const geo = new THREE.ExtrudeGeometry(shape, {depth:d, bevelEnabled:true, bevelSize:0.003, bevelThickness:0.003, bevelSegments:1});\n  const m = new THREE.Mesh(geo, mat);\n\n  const bx = (Math.random()-0.5)*AR*4.5;\n  const by = (Math.random()-0.5)*3.5;\n  const bz = 0.3+Math.random()*0.8;\n  m.position.set(bx, by, bz);\n  m.rotation.z = Math.random()*Math.PI*2;\n  m.castShadow = true;\n  machine.add(m);\n\n  bigBlades.push({\n    m,\n    ox:bx, oy:by, oz:bz,\n    ph: Math.random()*6.28,\n    sp: 0.3+Math.random()*1.2,\n    rotSp: (Math.random()-0.5)*0.025,\n    ampX: 0.08+Math.random()*0.3,\n    ampY: 0.06+Math.random()*0.25,\n  });\n}\n\n// \u2500\u2500 SCANLINE OVERLAY (non Three.js, canvas 2D sopra) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// gi\u00e0 fatto internamente\n\n// \u2500\u2500 CAMBIO COLORE LUCI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nlet colorT = 0, colorNext = 10+Math.random()*8, colorState = 0;\nconst colorStates = [\n  {lkey:0xffffff, lfill:0xff0000, lrim:0xffffff, lred:0xff0000},\n  {lkey:0xffffff, lfill:0xff4400, lrim:0xffddaa, lred:0xff2200},\n  {lkey:0xaabbff, lfill:0x2244ff, lrim:0x8899ff, lred:0x4466ff},\n  {lkey:0xffeeaa, lfill:0xffcc00, lrim:0xffffff, lred:0xff8800},\n  {lkey:0xffffff, lfill:0xff0000, lrim:0x00ffaa, lred:0xff0000},\n];\nfunction switchColor(){\n  colorState = (colorState+1)%colorStates.length;\n  const s = colorStates[colorState];\n  Lkey.color.set(s.lkey);\n  Lfill.color.set(s.lfill);\n  Lrim.color.set(s.lrim);\n  Lred.color.set(s.lred);\n  colorT = 0;\n  colorNext = 7+Math.random()*11;\n}\n\n// \u2500\u2500 LOOP \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nlet t = 0;\nfunction animate(){\n  requestAnimationFrame(animate);\n  t += 0.016;\n  colorT += 0.016;\n  if(colorT > colorNext) switchColor();\n\n  // FOUR-BAR LINKAGE \u2014 cinematica reale\n  linkSystems.forEach((lk, li)=>{\n    const theta = t*lk.speed + lk.phase;\n    const fb = fourBar(lk.ox, lk.oy, lk.r1, lk.r2, lk.r3, lk.r4, theta);\n    if(!fb) return;\n\n    // manovella A->B\n    const crankLen = lk.r1;\n    lk.crankMesh.position.set((fb.ox+fb.Bx)/2, (fb.oy+fb.By)/2, 0);\n    lk.crankMesh.rotation.z = Math.atan2(fb.By-fb.oy, fb.Bx-fb.ox)+Math.PI/2;\n    lk.crankMesh.scale.y = crankLen;\n\n    // biella B->C\n    const cLen = Math.hypot(fb.Cx-fb.Bx, fb.Cy-fb.By);\n    lk.connMesh.position.set((fb.Bx+fb.Cx)/2, (fb.By+fb.Cy)/2, 0);\n    lk.connMesh.rotation.z = Math.atan2(fb.Cy-fb.By, fb.Cx-fb.Bx)+Math.PI/2;\n    lk.connMesh.scale.y = Math.max(0.01, cLen);\n\n    // bilanciere C->D\n    const oLen = Math.hypot(fb.Dx-fb.Cx, fb.Dy-fb.Cy);\n    lk.outMesh.position.set((fb.Cx+fb.Dx)/2, (fb.Cy+fb.Dy)/2, 0);\n    lk.outMesh.rotation.z = Math.atan2(fb.Dy-fb.Cy, fb.Dx-fb.Cx)+Math.PI/2;\n    lk.outMesh.scale.y = Math.max(0.01, oLen);\n\n    lk.jA.position.set(fb.ox, fb.oy, 0);\n    lk.jB.position.set(fb.Bx, fb.By, 0);\n    lk.jC.position.set(fb.Cx, fb.Cy, 0);\n    lk.jD.position.set(fb.Dx, fb.Dy, 0);\n\n    // cuspidi sul punto B \u2014 tracciano ellissi\n    lk.spikes.forEach((s,si)=>{\n      const ang = Math.atan2(fb.By-fb.oy, fb.Bx-fb.ox) + s.ang;\n      s.m.position.set(fb.Bx+Math.cos(ang)*s.r, fb.By+Math.sin(ang)*s.r, (si-lk.spikes.length/2)*0.03);\n      s.m.rotation.z = ang+Math.PI/2;\n      s.m.scale.y = Math.max(0.1, 0.4+Math.abs(Math.sin(t*1.8+si+li*0.3))*1.2);\n    });\n  });\n\n  // CRESTE \u2014 si alzano e abbassano come pistoni con movimento ellittico\n  crests.forEach(c=>{\n    const v = Math.abs(Math.sin(t*c.sp + c.ph));\n    const sc = Math.max(0.05, 0.15 + v*c.amp);\n    c.m.scale.y = sc;\n    // offset verticale basato sulla scala\n    const base = c.m.position;\n    base.y = c.baseY + c.baseH*sc*0.5;\n    if(c.m.material.emissiveIntensity !== undefined && c.m.material.emissiveIntensity > 0)\n      c.m.material.emissiveIntensity = 0.7+Math.sin(t*3+c.ph)*0.3;\n  });\n\n  // PISTONI\n  pistons.forEach(p=>{\n    const stroke = Math.sin(t*p.sp + p.ph);\n    const dy = stroke*p.len*0.35;\n    p.inner.position.y = p.baseY + dy;\n    p.head.position.set(p.inner.position.x, p.baseY+dy+p.len*0.5, p.inner.position.z);\n    p.outer.position.y = p.baseY + p.len*0.28 + dy*0.1;\n    if(p.isRed) p.inner.material.emissiveIntensity = 0.4+Math.abs(stroke)*0.6;\n  });\n\n  // GRANDI LAME \u2014 movimento ellittico\n  bigBlades.forEach(b=>{\n    b.m.rotation.z += b.rotSp;\n    b.m.position.x = b.ox + Math.sin(t*b.sp+b.ph)*b.ampX;\n    b.m.position.y = b.oy + Math.cos(t*b.sp*0.7+b.ph+1)*b.ampY;\n  });\n\n  // LUCI animate \u2014 ombre continue sul corpo\n  Lkey.position.set(4+Math.sin(t*0.12)*2, 6+Math.cos(t*0.09)*1.5, 8);\n  Lkey.intensity = 700+Math.sin(t*1.1)*180;\n  Lfill.position.set(-5+Math.cos(t*0.1)*2, -4+Math.sin(t*0.08)*1.5, 5);\n  Lfill.intensity = 450+Math.cos(t*0.9)*100;\n  Lrim.position.set(Math.sin(t*0.07)*2, 5+Math.cos(t*0.06)*1, -3);\n  Lred.position.set(3+Math.sin(t*0.09)*1.5, -4+Math.cos(t*0.07)*1, 2);\n\n  // macchina STABILE \u2014 solo micro respiro\n  machine.rotation.x = Math.sin(t*0.04)*0.018;\n  machine.rotation.y = Math.cos(t*0.035)*0.022;\n\n  renderer.render(scene, camera);\n}\nanimate();\n</script>\n</body>\n</html>\n

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<title>ATELIER AI — TEST NFT</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#07030f;font-family:'Courier New',monospace}
+canvas{display:block;position:fixed;inset:0}
+#hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
+#hud .brand{font-size:8px;letter-spacing:5px;color:rgba(255,255,255,0.18);text-transform:uppercase}
+#hud .title{font-size:18px;font-weight:700;letter-spacing:3px;color:#fff;margin-top:3px;text-transform:uppercase}
+#hud .sub{font-size:8px;letter-spacing:4px;color:rgba(255,255,255,0.25);margin-top:3px;text-transform:uppercase}
+#pal{position:fixed;bottom:18px;right:18px;z-index:10;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.pb{font-family:'Courier New',monospace;font-size:8px;letter-spacing:3px;text-transform:uppercase;padding:4px 12px;border:0.5px solid rgba(255,255,255,0.18);background:rgba(0,0,0,0.5);color:rgba(255,255,255,0.3);cursor:pointer;transition:all .25s}
+.pb:hover,.pb.on{color:#fff;border-color:rgba(255,255,255,0.55);background:rgba(255,255,255,0.07)}
+#info{position:fixed;bottom:18px;left:20px;z-index:10;font-size:7px;letter-spacing:3px;color:rgba(255,255,255,0.12);text-transform:uppercase;line-height:2.4;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="brand">Atelier AI · Test NFT</div>
+  <div class="title" id="ht">OPUS · CRIMSON</div>
+  <div class="sub" id="hsub">War 9 · Economy 8 · Politics 9</div>
+</div>
+<div id="pal">
+  <button class="pb on" onclick="setPal(0)">CRIMSON</button>
+  <button class="pb" onclick="setPal(1)">NEON</button>
+  <button class="pb" onclick="setPal(2)">GOLD</button>
+  <button class="pb" onclick="setPal(3)">VIOLET</button>
+  <button class="pb" onclick="setPal(4)">SOLAR</button>
+</div>
+<div id="info"><div>[P] palette · [R] reset</div></div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const SIG={war:9,crisis:5,economy:8,politics:9,human:5,tech:6};
+const ENTITIES=[
+  {label:'Trump',type:'face'},
+  {label:'Warship',type:'ship'},
+  {label:'Iran',type:'place'},
+  {label:'Gold',type:'gold'},
+  {label:'Silver',type:'silver'}
+];
+const N_GOLD=20, N_SILVER=18;
+const HAS_SHIP=true;
+
+// Ogni palette ha due colori per il gradiente sfondo + colori oggetti
+const PALS=[
+  {name:'CRIMSON',
+   bgA:0x0a0008, bgB:0x1a0015,
+   sphere:new THREE.Color(0.55,0.04,0.12), sphereE:new THREE.Color(0.4,0.0,0.08),
+   c1:0xff2d78, c2:0xcc0044, c3:0xff99cc,
+   gold:0xffcc00, silver:0xdddddd,
+   ship:0x8899bb, missile:0xff2d78,
+   lA:0xff1155, lB:0x3300ff,
+   label:['#ff2d78','#ff9933','#ffee00','#ffffff','#ff66aa']},
+  {name:'NEON',
+   bgA:0x020810, bgB:0x041020,
+   sphere:new THREE.Color(0.02,0.25,0.18), sphereE:new THREE.Color(0.0,0.18,0.12),
+   c1:0x00ffcc, c2:0x00dd88, c3:0x88ffee,
+   gold:0x00ffcc, silver:0x00aacc,
+   ship:0x004455, missile:0x00ffcc,
+   lA:0x00ffaa, lB:0x002266,
+   label:['#00ffcc','#00ff88','#88ffaa','#ffee00','#00ddff']},
+  {name:'GOLD',
+   bgA:0x080400, bgB:0x180a00,
+   sphere:new THREE.Color(0.55,0.12,0.02), sphereE:new THREE.Color(0.45,0.06,0.0),
+   c1:0xff8800, c2:0xffcc00, c3:0xffee88,
+   gold:0xffd700, silver:0xff9900,
+   ship:0x886644, missile:0xff6600,
+   lA:0xff8800, lB:0xff2200,
+   label:['#ffcc00','#ff9900','#ff6600','#ffee88','#ff3300']},
+  {name:'VIOLET',
+   bgA:0x060010, bgB:0x0a001a,
+   sphere:new THREE.Color(0.22,0.04,0.45), sphereE:new THREE.Color(0.15,0.0,0.35),
+   c1:0xcc00ff, c2:0xaa44ff, c3:0xff88ff,
+   gold:0xee88ff, silver:0xaa66ff,
+   ship:0x553377, missile:0xcc00ff,
+   lA:0xbb00ff, lB:0xff0088,
+   label:['#cc00ff','#ff00cc','#8844ff','#ff88ff','#00aaff']},
+  {name:'SOLAR',
+   bgA:0x5a1200, bgB:0x901800,
+   sphere:new THREE.Color(0.6,0.08,0.02), sphereE:new THREE.Color(0.5,0.04,0.0),
+   c1:0x4455ff, c2:0x2233ee, c3:0x88aaff,
+   gold:0x6677ff, silver:0x4455cc,
+   ship:0xaa6633, missile:0x3344ff,
+   lA:0x3344ff, lB:0xff5500,
+   label:['#4455ff','#2233ee','#88aaff','#ff8833','#ffcc55']},
+];
+
+let palIdx=0, scene, camera, renderer, clock, animId;
+// Dati animazione — tutto precalcolato, zero random in loop
+let animData=[];
+
+const PI2=Math.PI*2;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+function init(){
+  const cv=document.getElementById('c');
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  clock=new THREE.Clock();
+  camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.01,300);
+  camera.position.set(0,2,13);
+  camera.lookAt(0,0,0);
+  buildScene();
+  animate();
+}
+
+function mR(c,r,m){return new THREE.MeshStandardMaterial({color:c,roughness:r??0.85,metalness:m??0.1});}
+function mM(c){return new THREE.MeshStandardMaterial({color:c,roughness:0.06,metalness:0.97});}
+function mG(c,ei){return new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:ei??0.9,roughness:0.02,metalness:0.98});}
+
+function buildScene(){
+  cancelAnimationFrame(animId);
+  animData=[];
+
+  if(scene){
+    scene.traverse(o=>{
+      if(o.geometry)o.geometry.dispose();
+      if(o.material){if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material.dispose();}
+    });
+  }
+
+  const P=PALS[palIdx];
+  document.getElementById('ht').textContent='OPUS · '+P.name;
+  document.querySelectorAll('.pb').forEach((b,i)=>b.classList.toggle('on',i===palIdx));
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(P.bgA);
+  scene.fog=new THREE.FogExp2(P.bgB,0.015);
+
+  // ── LUCI ──
+  const L1=new THREE.SpotLight(P.lA,500,60,0.3,0.4);
+  L1.position.set(6,8,10);L1.castShadow=true;
+  L1.shadow.mapSize.set(1024,1024);scene.add(L1);
+  const L2=new THREE.SpotLight(P.lB,300,50,0.5,0.3);
+  L2.position.set(-7,-5,8);scene.add(L2);
+  const L3=new THREE.PointLight(0xffffff,150,40);L3.position.set(0,8,-6);scene.add(L3);
+  scene.add(new THREE.AmbientLight(0x111111,1));
+
+  // ── SFERA CENTRALE con spuntoni ──
+  const world=new THREE.Group();scene.add(world);
+  const base=new THREE.Group();world.add(base);
+
+  // Sfera deformata
+  const sc=P.sphere.clone();
+  const sGeo=new THREE.SphereGeometry(2.8,64,48);
+  const sPos=sGeo.attributes.position;
+  for(let i=0;i<sPos.count;i++){
+    const x=sPos.getX(i),y=sPos.getY(i),z=sPos.getZ(i);
+    const n=Math.sin(x*3.5+y*2.8)*Math.cos(y*3.2+z*3.8)*0.22;
+    sPos.setXYZ(i,x+n*0.35,y+n*0.45,z+n*0.25);
+  }
+  sGeo.computeVertexNormals();
+  const sphereMesh=new THREE.Mesh(sGeo,new THREE.MeshStandardMaterial({
+    color:sc,roughness:0.88,metalness:0.12,
+    emissive:P.sphereE,emissiveIntensity:0.5
+  }));
+  base.add(sphereMesh);
+
+  // ── CRESTE / SPUNTONI ──
+  const crests=[];
+  for(let i=0;i<260;i++){
+    const a=i/260*PI2;
+    const px=Math.cos(a)*3.3, py=Math.sin(a*3.1)*0.4+0.3, pz=Math.sin(a)*2.8*0.5;
+    const norm=new THREE.Vector3(px,py*0.5,pz).normalize();
+    const h=0.05+Math.pow(Math.abs(Math.sin(i/260*Math.PI*16)),0.3)*(0.6+Math.random()*1.0);
+    const isAccent=Math.random()<0.2;
+    const useBox=Math.random()<0.55;
+    const geo=useBox
+      ? new THREE.BoxGeometry(0.008,h,0.07+Math.random()*0.14)
+      : new THREE.ConeGeometry(0.01,h,4);
+    const col=isAccent?P.c1:(Math.random()<0.12?P.c2:sc.getHex());
+    const mat=isAccent?mG(P.c1,0.8):mR(col,0.88,0.06);
+    const m=new THREE.Mesh(geo,mat);
+    m.position.set(px,py,pz);
+    m.position.addScaledVector(norm,h*0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),norm);
+    base.add(m);
+    crests.push({m,norm,base:new THREE.Vector3(px,py,pz),h,
+      ph:i*0.07, sp:0.4+Math.random()*2.8, amp:0.6+Math.random()*3.5, isAccent});
+  }
+
+  // ── FRAMMENTI — molti, sparsi a 360° ──
+  const frags=[];
+  for(let i=0;i<350;i++){
+    const isAccent=Math.random()<0.18;
+    const t=Math.random();
+    const geo=t<0.35
+      ? new THREE.ConeGeometry(0.005+Math.random()*0.02, 0.05+Math.random()*0.35, 4)
+      : t<0.65
+      ? new THREE.BoxGeometry(0.008, 0.04+Math.random()*0.22, 0.03+Math.random()*0.1)
+      : new THREE.SphereGeometry(0.01+Math.random()*0.04, 6, 4);
+    const col=isAccent?P.c1:sc.getHex();
+    const mat=isAccent?mG(P.c1,0.7):mR(col,0.8,0.05);
+    const mesh=new THREE.Mesh(geo,mat);
+    // distribuzione sferica reale a 360°
+    const phi=Math.acos(2*Math.random()-1);
+    const theta=Math.random()*PI2;
+    const r=3.0+Math.random()*7.0;
+    const ox=Math.sin(phi)*Math.cos(theta)*r;
+    const oy=Math.cos(phi)*r;
+    const oz=Math.sin(phi)*Math.sin(theta)*r;
+    mesh.position.set(ox,oy,oz);
+    mesh.rotation.set(Math.random()*PI2,Math.random()*PI2,Math.random()*PI2);
+    base.add(mesh);
+    frags.push({m:mesh,ox,oy,oz,
+      rx:(Math.random()-0.5)*0.014, ry:(Math.random()-0.5)*0.018, rz:(Math.random()-0.5)*0.012,
+      // oscillazione smooth — ampiezza fissa, no random in loop
+      ax:0.03+Math.random()*0.12, ay:0.03+Math.random()*0.10, az:0.02+Math.random()*0.08,
+      fx:0.06+Math.random()*0.22, fy:0.05+Math.random()*0.18, fz:0.04+Math.random()*0.16,
+      px:Math.random()*PI2, py:Math.random()*PI2, pz:Math.random()*PI2, isAccent});
+  }
+
+  // ── SFERE ORO — grandi, diverse dimensioni, 360° ──
+  const goldMat=new THREE.MeshStandardMaterial({color:P.gold,roughness:0.06,metalness:0.97,emissive:P.gold,emissiveIntensity:0.25});
+  const goldData=[];
+  for(let i=0;i<N_GOLD;i++){
+    const r=0.09+Math.random()*0.25; // dimensioni molto variabili
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r,14,10),goldMat);
+    const phi=Math.acos(2*Math.random()-1), theta=Math.random()*PI2;
+    const dist=3.5+Math.random()*6;
+    const ox=Math.sin(phi)*Math.cos(theta)*dist;
+    const oy=Math.cos(phi)*dist;
+    const oz=Math.sin(phi)*Math.sin(theta)*dist;
+    m.position.set(ox,oy,oz);
+    world.add(m);
+    goldData.push({m,ox,oy,oz, ph:Math.random()*PI2, spX:0.04+Math.random()*0.10, spY:0.03+Math.random()*0.09});
+  }
+
+  // ── SFERE ARGENTO ──
+  const silverMat=new THREE.MeshStandardMaterial({color:P.silver,roughness:0.04,metalness:0.99,emissive:0x333333,emissiveIntensity:0.1});
+  const silverData=[];
+  for(let i=0;i<N_SILVER;i++){
+    const r=0.07+Math.random()*0.18;
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),silverMat);
+    const phi=Math.acos(2*Math.random()-1), theta=Math.random()*PI2;
+    const dist=3.0+Math.random()*5.5;
+    const ox=Math.sin(phi)*Math.cos(theta)*dist;
+    const oy=Math.cos(phi)*dist;
+    const oz=Math.sin(phi)*Math.sin(theta)*dist;
+    m.position.set(ox,oy,oz);
+    world.add(m);
+    silverData.push({m,ox,oy,oz, ph:Math.random()*PI2+1, spX:0.035+Math.random()*0.08, spY:0.03+Math.random()*0.07});
+  }
+
+  // ── MISSILI — variabili per dimensione, a 360° ──
+  const missileData=[];
+  const nm=Math.max(4,Math.floor(SIG.war/2));
+  for(let i=0;i<nm;i++){
+    const sc2=0.5+Math.random()*2.0; // scala molto variabile
+    const g=new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.11,2,10),mM(0x888888)));
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.6,10),mG(P.missile,0.9));
+    tip.position.y=1.3;g.add(tip);
+    for(let f=0;f<4;f++){
+      const fin=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.42,0.012),mM(0x555555));
+      fin.position.set(0.11,-0.78,0);fin.rotation.y=f*Math.PI/2;g.add(fin);
+    }
+    const fl=new THREE.Mesh(new THREE.ConeGeometry(0.065,0.28,6),mG(0xff6600,0.95));
+    fl.position.y=-1.14;fl.rotation.x=Math.PI;g.add(fl);
+    g.scale.setScalar(sc2);
+    // posizione sferica 360°
+    const phi=Math.acos(2*Math.random()-1), theta=Math.random()*PI2;
+    const dist=4+Math.random()*7;
+    const ox=Math.sin(phi)*Math.cos(theta)*dist;
+    const oy=Math.cos(phi)*dist;
+    const oz=Math.sin(phi)*Math.sin(theta)*dist;
+    g.position.set(ox,oy,oz);
+    // orientamento random ma stabile
+    g.rotation.set(Math.random()*PI2,Math.random()*PI2,Math.random()*PI2);
+    world.add(g);
+    // orbita lenta attorno a un asse random
+    const axis=new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize();
+    missileData.push({m:g,ox,oy,oz, axis,
+      orbitR:dist, orbitAngle:theta, orbitPhi:phi,
+      orbitSpeed:0.003+Math.random()*0.006,
+      floatAmp:0.3+Math.random()*0.8, floatSp:0.3+Math.random()*0.6, floatPh:Math.random()*PI2,
+      fl:fl});
+  }
+
+  // ── NAVE ──
+  let shipData=null;
+  if(HAS_SHIP){
+    const sg=new THREE.Group();
+    const sc3=0.8+Math.random()*1.4;
+    sg.add(new THREE.Mesh(new THREE.BoxGeometry(3.5,0.25,0.7),mM(P.ship)));
+    const bow=new THREE.Mesh(new THREE.ConeGeometry(0.36,0.85,4),mM(P.ship));
+    bow.position.set(2.15,0,0);bow.rotation.z=-Math.PI/2;bow.rotation.y=Math.PI/4;sg.add(bow);
+    const bridge=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.5,0.55),mM(P.ship));
+    bridge.position.set(-0.3,0.38,0);sg.add(bridge);
+    const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.95,6),mG(P.c1,0.6));
+    barrel.position.set(1.05,0.38,0);barrel.rotation.z=Math.PI/2;sg.add(barrel);
+    sg.scale.setScalar(sc3);
+    const phi=Math.acos(2*Math.random()-1), theta=Math.random()*PI2;
+    const dist=4+Math.random()*5;
+    const ox=Math.sin(phi)*Math.cos(theta)*dist;
+    const oy=Math.cos(phi)*dist;
+    const oz=Math.sin(phi)*Math.sin(theta)*dist;
+    sg.position.set(ox,oy,oz);
+    sg.rotation.set(Math.random()*PI2,Math.random()*PI2,Math.random()*0.5);
+    world.add(sg);
+    shipData={m:sg, ox,oy,oz,
+      floatAmp:0.4+Math.random()*0.6, floatSp:0.12+Math.random()*0.08, floatPh:Math.random()*PI2,
+      rotSp:0.002+Math.random()*0.003};
+  }
+
+  // ── NOMI ENTITÀ — label canvas ──
+  const nameData=[];
+  ENTITIES.filter(e=>e.type==='face'||e.type==='place').forEach((e,i)=>{
+    const cv2=document.createElement('canvas');cv2.width=256;cv2.height=64;
+    const ctx=cv2.getContext('2d');
+    ctx.font='bold 30px monospace';
+    ctx.fillStyle=P.label[i%P.label.length];
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(e.label,128,32);
+    const tex=new THREE.CanvasTexture(cv2);
+    const mesh=new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6,0.4),
+      new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+    const phi=Math.acos(2*Math.random()-1), theta=Math.random()*PI2;
+    const dist=3.5+Math.random()*5;
+    const ox=Math.sin(phi)*Math.cos(theta)*dist;
+    const oy=Math.cos(phi)*dist;
+    const oz=Math.sin(phi)*Math.sin(theta)*dist;
+    mesh.position.set(ox,oy,oz);
+    world.add(mesh);
+    nameData.push({m:mesh,ox,oy,oz,
+      floatSp:0.2+Math.random()*0.4, floatAmp:0.3+Math.random()*0.5, floatPh:Math.random()*PI2});
+  });
+
+  // ── LINEE WIREFRAME lunghe — NO box, solo linee ──
+  for(let i=0;i<18;i++){
+    const phi1=Math.acos(2*Math.random()-1), theta1=Math.random()*PI2;
+    const phi2=Math.acos(2*Math.random()-1), theta2=Math.random()*PI2;
+    const r1=3+Math.random()*7, r2=3+Math.random()*7;
+    const pts=[
+      new THREE.Vector3(Math.sin(phi1)*Math.cos(theta1)*r1, Math.cos(phi1)*r1, Math.sin(phi1)*Math.sin(theta1)*r1),
+      new THREE.Vector3(Math.sin(phi2)*Math.cos(theta2)*r2, Math.cos(phi2)*r2, Math.sin(phi2)*Math.sin(theta2)*r2),
+    ];
+    const geo=new THREE.BufferGeometry().setFromPoints(pts);
+    const mat=new THREE.LineBasicMaterial({color:P.c1,opacity:0.1+Math.random()*0.35,transparent:true});
+    scene.add(new THREE.Line(geo,mat));
+  }
+
+  // store per animate
+  scene.userData={crests,frags,goldData,silverData,missileData,shipData,nameData,L1,L2,base,world};
+  animate();
+}
+
+function animate(){
+  animId=requestAnimationFrame(animate);
+  const t=clock.getElapsedTime();
+  const {crests,frags,goldData,silverData,missileData,shipData,nameData,L1,L2,base,world}=scene.userData;
+
+  // sfera ruota lenta e smooth
+  base.rotation.y=t*0.04;
+  base.rotation.x=Math.sin(t*0.025)*0.05;
+
+  // creste
+  crests.forEach(c=>{
+    const s=Math.max(0.06, 0.22+Math.abs(Math.sin(t*c.sp+c.ph))*c.amp);
+    c.m.scale.y=s;
+    c.m.position.copy(c.base).addScaledVector(c.norm,c.h*s*0.5);
+    if(c.isAccent&&c.m.material.emissiveIntensity!==undefined)
+      c.m.material.emissiveIntensity=0.7+Math.sin(t*2.8+c.ph)*0.3;
+  });
+
+  // frammenti — smooth, no jitter
+  frags.forEach(o=>{
+    o.m.rotation.x+=o.rx; o.m.rotation.y+=o.ry; o.m.rotation.z+=o.rz;
+    o.m.position.x=o.ox+Math.sin(t*o.fx+o.px)*o.ax;
+    o.m.position.y=o.oy+Math.cos(t*o.fy+o.py)*o.ay;
+    o.m.position.z=o.oz+Math.sin(t*o.fz+o.pz)*o.az;
+  });
+
+  // oro
+  goldData.forEach(g=>{
+    g.m.position.x=g.ox+Math.sin(t*g.spX+g.ph)*0.6;
+    g.m.position.y=g.oy+Math.cos(t*g.spY+g.ph)*0.5;
+    g.m.position.z=g.oz+Math.sin(t*(g.spX+g.spY)*0.5+g.ph+1)*0.4;
+  });
+
+  // argento
+  silverData.forEach(g=>{
+    g.m.position.x=g.ox+Math.cos(t*g.spX+g.ph)*0.5;
+    g.m.position.y=g.oy+Math.sin(t*g.spY+g.ph)*0.45;
+    g.m.position.z=g.oz+Math.cos(t*(g.spX+g.spY)*0.5+g.ph+2)*0.35;
+  });
+
+  // missili — galleggiano smooth
+  missileData.forEach(ms=>{
+    ms.m.position.x=ms.ox+Math.sin(t*ms.floatSp+ms.floatPh)*ms.floatAmp;
+    ms.m.position.y=ms.oy+Math.cos(t*ms.floatSp*0.8+ms.floatPh)*ms.floatAmp*0.8;
+    ms.m.position.z=ms.oz+Math.sin(t*ms.floatSp*0.6+ms.floatPh+1)*ms.floatAmp*0.5;
+    if(ms.fl&&ms.fl.material)
+      ms.fl.material.emissiveIntensity=0.7+Math.sin(t*8+ms.floatPh)*0.3;
+  });
+
+  // nave
+  if(shipData){
+    shipData.m.position.x=shipData.ox+Math.sin(t*shipData.floatSp+shipData.floatPh)*shipData.floatAmp;
+    shipData.m.position.y=shipData.oy+Math.cos(t*shipData.floatSp*0.9+shipData.floatPh)*shipData.floatAmp*0.7;
+    shipData.m.rotation.y+=shipData.rotSp;
+  }
+
+  // nomi
+  nameData.forEach(n=>{
+    n.m.position.x=n.ox+Math.sin(t*n.floatSp+n.floatPh)*n.floatAmp*0.5;
+    n.m.position.y=n.oy+Math.cos(t*n.floatSp+n.floatPh)*n.floatAmp;
+    n.m.lookAt(camera.position);
+  });
+
+  // luci pulsano smooth
+  L1.intensity=520+Math.sin(t*0.9)*100;
+  L2.intensity=280+Math.cos(t*0.7)*80;
+  L1.position.set(6+Math.sin(t*0.12)*2, 8+Math.cos(t*0.09)*1.5, 10);
+
+  // camera oscilla leggerissima
+  camera.position.x=Math.sin(t*0.04)*0.8;
+  camera.position.y=2+Math.cos(t*0.03)*0.5;
+  camera.lookAt(0,0,0);
+
+  renderer.render(scene,camera);
+}
+
+window.setPal=i=>{palIdx=i;buildScene();};
+document.addEventListener('keydown',e=>{
+  if(e.key==='p'||e.key==='P'){palIdx=(palIdx+1)%PALS.length;buildScene();}
+  if(e.key==='r'||e.key==='R')buildScene();
+});
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+init();
+</script>
+</body>
+</html>

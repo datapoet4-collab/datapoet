@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>ATELIER AI — ALL SPHERES</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#111;font-family:'Courier New',monospace}
+canvas{display:block;position:fixed;inset:0}
+#btns{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:5px;flex-wrap:wrap;justify-content:center;max-width:95vw}
+.sb{font-family:'Courier New',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;padding:4px 10px;border:0.5px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.5);color:rgba(255,255,255,0.35);cursor:pointer;transition:all .2s}
+.sb:hover,.sb.on{color:#fff;border-color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.07)}
+.sep{color:rgba(255,255,255,.2);line-height:28px;padding:0 4px}
+#hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none;color:#fff;font-size:12px;letter-spacing:3px;text-transform:uppercase}
+#pal{position:fixed;top:16px;right:20px;z-index:10;pointer-events:none;color:rgba(255,255,255,.4);font-size:9px;letter-spacing:2px}
+#rec{position:fixed;top:16px;right:80px;z-index:20;font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;padding:8px 18px;border:0.5px solid rgba(255,255,255,0.4);background:rgba(0,0,0,0.8);color:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">BLOB</div>
+<div id="pal">CRIMSON</div>
+<button id="rec" onclick="startRec()">⏺ REC</button>
+<div id="btns">
+  <button class="sb on" onclick="go(0)">BLOB</button>
+  <button class="sb" onclick="go(1)">SPHERE</button>
+  <button class="sb" onclick="go(2)">CUBE</button>
+  <button class="sb" onclick="go(3)">OCTA</button>
+  <button class="sb" onclick="go(4)">TORUS</button>
+  <button class="sb" onclick="go(5)">ICOSA</button>
+  <span class="sep">|</span>
+  <span class="sep">TENSION:</span>
+  <button class="sb on" onclick="setTension(0)" id="t0">LOW</button>
+  <button class="sb" onclick="setTension(1)" id="t1">MED</button>
+  <button class="sb" onclick="setTension(2)" id="t2">HIGH</button>
+  <span class="sep">|</span>
+  <button class="sb" onclick="go(6)">ZEBRA</button>
+  <button class="sb" onclick="go(7)">ESAGONO</button>
+  <button class="sb" onclick="go(8)">PENNELLATE</button>
+  <button class="sb" onclick="go(9)">BOMBATA</button>
+  <button class="sb" onclick="go(10)">INNESTO</button>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.01,200);
+camera.position.set(0,0,9);camera.lookAt(0,0,0);
+
+let scene,group,animId;
+let currentTension=0;
+const TENSIONS=[0.1,0.5,1.0];
+const TENSION_BLOBS=[20,100,220];
+
+// Palette originali esatte dal sito
+const PALS=[
+  {name:'CRIMSON', bg:0x8a0000, sphere:new THREE.Color(.80,.04,.04), sphereE:new THREE.Color(.55,.0,.0),   lA:0xff1111, lB:0x440000},
+  {name:'GOLD',    bg:0x7fff00, sphere:new THREE.Color(.855,.647,.125),sphereE:new THREE.Color(.6,.45,.08), lA:0xdaa520, lB:0x446600},
+  {name:'NEON',    bg:0x020810, sphere:new THREE.Color(.02,.28,.20),  sphereE:new THREE.Color(.0,.18,.12),  lA:0x00ffaa, lB:0x002266},
+  {name:'VIOLET',  bg:0x060010, sphere:new THREE.Color(.22,.04,.48),  sphereE:new THREE.Color(.14,.0,.35),  lA:0xbb00ff, lB:0xff0088},
+  {name:'YELLOW',  bg:0x1a1500, sphere:new THREE.Color(.70,.60,.0),   sphereE:new THREE.Color(.50,.40,.0),  lA:0xffdd00, lB:0x886600},
+  {name:'GRAY',    bg:0xff8c00, sphere:new THREE.Color(.38,.38,.38),  sphereE:new THREE.Color(.22,.22,.22), lA:0xaaaaaa, lB:0x444444},
+];
+
+// Palette assegnata a ogni forma originale
+const FORM_PAL=[0,1,2,3,4,5,  -1,-1,-1,-1,-1]; // -1 = rara, sfondo nero
+
+// SHAPE ANIMS per le 6 forme originali
+const SHAPE_ANIMS={
+  BLOB:{
+    frags:(base,c1,gray)=>{const fd=[];for(let i=0;i<180;i++){const phi=Math.acos(1-2*Math.random()),theta=Math.random()*Math.PI*2;const r=2.8+Math.random()*4.5;const isA=Math.random()<.22;const len=.04+Math.random()*.22;const geo=Math.random()<.6?new THREE.BoxGeometry(.005,len,.012):new THREE.ConeGeometry(.006,len,4);const m=new THREE.Mesh(geo,isA?c1:gray);const ox=Math.sin(phi)*Math.cos(theta)*r,oy=Math.cos(phi)*r,oz=Math.sin(phi)*Math.sin(theta)*r*.7;m.position.set(ox,oy,oz);m.rotation.set(Math.random()*6.28,Math.random()*6.28,Math.random()*6.28);base.add(m);fd.push({m,ox,oy,oz,ph:Math.random()*6.28,sp:.05+Math.random()*.2,amp:.01+Math.random()*.04,rx:(Math.random()-.5)*.02,ry:(Math.random()-.5)*.025,rz:(Math.random()-.5)*.018});}return fd;},
+    anim:(fd,t)=>{fd.forEach(b=>{b.m.rotation.x+=b.rx;b.m.rotation.y+=b.ry;b.m.rotation.z+=b.rz;const p=Math.sin(t*b.sp+b.ph)*b.amp;b.m.position.set(b.ox+p,b.oy+p,b.oz+p);});}
+  },
+  SPHERE:{
+    frags:(base,c1,gray)=>{const fd=[];for(let ring=0;ring<4;ring++){const N=40+ring*10,rd=3.5+ring*1.2,tilt=(ring-.5)*.4;for(let i=0;i<N;i++){const angle=i/N*Math.PI*2,len=.3+Math.random()*.6,isA=Math.random()<.3;const geo=new THREE.BoxGeometry(.004,len,.008);const m=new THREE.Mesh(geo,isA?c1:gray);m.position.set(Math.cos(angle)*rd,Math.sin(tilt)*1.5,Math.sin(angle)*rd);m.rotation.set(tilt,angle,0);base.add(m);fd.push({m,angle,rd,tilt,ph:i*.15+ring,sp:.08+ring*.02});}}return fd;},
+    anim:(fd,t)=>{fd.forEach(b=>{const a=b.angle+t*b.sp;b.m.position.set(Math.cos(a)*b.rd,Math.sin(b.tilt+Math.sin(t*.3+b.ph)*.3)*1.5,Math.sin(a)*b.rd);b.m.rotation.y=a;});}
+  },
+  CUBE:{
+    frags:(base,c1,gray)=>{const fd=[];for(let i=0;i<180;i++){const phi=Math.acos(1-2*Math.random()),theta=Math.random()*Math.PI*2;const r=2.8+Math.random()*5;const isA=Math.random()<.25;const s=.04+Math.random()*.18;const geo=new THREE.BoxGeometry(s,s*(.3+Math.random()*.8),s*.3);const m=new THREE.Mesh(geo,isA?c1:gray);const ox=Math.sin(phi)*Math.cos(theta)*r,oy=Math.cos(phi)*r,oz=Math.sin(phi)*Math.sin(theta)*r*.7;m.position.set(ox,oy,oz);m.rotation.set(Math.random()*6.28,Math.random()*6.28,Math.random()*6.28);base.add(m);fd.push({m,nx:ox/r,ny:oy/r,nz:oz/r,dist:r,ph:Math.random()*6.28,sp:.04+Math.random()*.15,amp:.015+Math.random()*.05});}return fd;},
+    anim:(fd,t)=>{fd.forEach(b=>{b.m.rotation.x+=.01;b.m.rotation.y+=.008;const p=Math.sin(t*b.sp+b.ph)*b.amp;b.m.position.set(b.nx*(b.dist+p*3),b.ny*(b.dist+p*3),b.nz*(b.dist+p*3));});}
+  },
+  OCTA:{
+    frags:(base,c1,gray)=>{const fd=[];[[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]].forEach((v,vi)=>{for(let i=0;i<25;i++){const sp=.3,dx=v[0]+(Math.random()-.5)*sp,dy=v[1]+(Math.random()-.5)*sp,dz=v[2]+(Math.random()-.5)*sp;const len=Math.random()<.4?.5+Math.random()*1.2:.1+Math.random()*.4;const isA=i<8;const geo=new THREE.BoxGeometry(.004,len,.008);const m=new THREE.Mesh(geo,isA?c1:gray);const dist=2.8+Math.random()*3;m.position.set(dx*dist,dy*dist,dz*dist);m.lookAt(dx*dist*2,dy*dist*2,dz*dist*2);m.rotateX(Math.PI/2);base.add(m);fd.push({m,dx,dy,dz,dist,ph:i*.2+vi,sp:.06+Math.random()*.15,amp:.02+Math.random()*.06});}});return fd;},
+    anim:(fd,t)=>{fd.forEach(b=>{const p=Math.sin(t*b.sp+b.ph)*b.amp,d=b.dist+p*4;b.m.position.set(b.dx*d,b.dy*d,b.dz*d);b.m.scale.y=1+Math.abs(p)*3;});}
+  },
+  TORUS:{
+    frags:(base,c1,gray)=>{const fd=[];for(let i=0;i<250;i++){const angle=i/250*Math.PI*2,spiral=i/250*Math.PI*8,tR=2.0,tubeR=.9+Math.random()*1.5,isA=Math.random()<.25;const geo=new THREE.BoxGeometry(.004,.08+Math.random()*.4,.008);const m=new THREE.Mesh(geo,isA?c1:gray);const ox=(tR+tubeR*Math.cos(spiral))*Math.cos(angle),oy=tubeR*Math.sin(spiral),oz=(tR+tubeR*Math.cos(spiral))*Math.sin(angle);m.position.set(ox,oy,oz);m.rotation.set(spiral,angle,Math.random()*6.28);base.add(m);fd.push({m,angle,spiral,tR,tubeR,ph:Math.random()*6.28,sp:.04+Math.random()*.12,amp:.015+Math.random()*.04});}return fd;},
+    anim:(fd,t)=>{fd.forEach(b=>{const a=b.angle+t*b.sp,s=b.spiral+t*b.sp*.5,p=Math.sin(t*b.sp*2+b.ph)*b.amp,tr=b.tubeR+p*2;b.m.position.set((b.tR+tr*Math.cos(s))*Math.cos(a),tr*Math.sin(s),(b.tR+tr*Math.cos(s))*Math.sin(a));b.m.rotation.x=s;b.m.rotation.y=a;});}
+  },
+  ICOSA:{
+    frags:(base,c1,gray)=>{return[];},
+    anim:(fd,t)=>{}
+  },
+};
+
+function makePaintTex(){
+  const cv=document.createElement('canvas');cv.width=1024;cv.height=1024;
+  const ctx=cv.getContext('2d');ctx.fillStyle='#111111';ctx.fillRect(0,0,1024,1024);
+  ctx.lineCap='round';
+  for(let i=0;i<18;i++){
+    const cols=['#cc1400','#dd1500','#bb1200'];ctx.strokeStyle=cols[i%3];
+    ctx.lineWidth=40+Math.random()*80;ctx.beginPath();
+    ctx.moveTo(Math.random()*1024,Math.random()*1024);
+    ctx.bezierCurveTo(Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024);
+    ctx.globalAlpha=.5+Math.random()*.5;
+    if(Math.random()<.4)ctx.setLineDash([60+Math.random()*100,20+Math.random()*60]);
+    else ctx.setLineDash([]);ctx.stroke();
+  }
+  ctx.globalAlpha=1;ctx.setLineDash([]);
+  return new THREE.CanvasTexture(cv);
+}
+
+function makeStripeTex(){
+  const cv=document.createElement('canvas');cv.width=1024;cv.height=1024;
+  const ctx=cv.getContext('2d');ctx.fillStyle='#666666';ctx.fillRect(0,0,1024,1024);
+  const sw=1024/32;for(let i=0;i<32;i+=2){ctx.fillStyle='#3a1a66';ctx.fillRect(i*sw,0,sw,1024);}
+  return new THREE.CanvasTexture(cv);
+}
+
+const FORMS=[
+  // 0-5 ORIGINALI
+  {name:'BLOB',   core:r=>{const g=new THREE.SphereGeometry(r,64,48);const p=g.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);const n=Math.sin(x*4+y*3.2)*Math.cos(y*3.6+z*4)*.18;p.setXYZ(i,x+n*.3,y+n*.4,z+n*.2);}g.computeVertexNormals();return g;}, blob:r=>new THREE.SphereGeometry(r,14,10), blobDist:.85},
+  {name:'SPHERE', core:r=>new THREE.SphereGeometry(r,48,36),          blob:r=>new THREE.SphereGeometry(r,12,8),  blobDist:1.4},
+  {name:'CUBE',   core:r=>new THREE.BoxGeometry(r*1.7,r*1.7,r*1.7),   blob:r=>new THREE.BoxGeometry(r,r,r),      blobDist:1.3},
+  {name:'OCTA',   core:r=>new THREE.OctahedronGeometry(r*1.18,2),     blob:r=>new THREE.OctahedronGeometry(r,0), blobDist:1.2},
+  {name:'TORUS',  core:r=>new THREE.TorusGeometry(r*.9,r*.38,32,64),  blob:r=>new THREE.SphereGeometry(r,10,8),  blobDist:1.1},
+  {name:'ICOSA',  core:r=>new THREE.SphereGeometry(r,32,24),     blob:r=>new THREE.SphereGeometry(r,6,4),blobDist:0},
+  // 6-10 RARE — colori fissi
+  {name:'ZEBRA', rare:true,
+   build(g){
+     // Texture zebra Fiorentina — viola acceso, linee morbide irregolari, sfumata
+     const ztex=(()=>{
+       const cv=document.createElement('canvas');cv.width=1024;cv.height=1024;
+       const ctx=cv.getContext('2d');
+       // Sfondo grigio sfumato
+       const grad=ctx.createLinearGradient(0,0,1024,1024);
+       grad.addColorStop(0,'#aaaaaa');grad.addColorStop(.5,'#777777');grad.addColorStop(1,'#999999');
+       ctx.fillStyle=grad;ctx.fillRect(0,0,1024,1024);
+       // Molte linee viola Fiorentina morbide
+       for(let i=0;i<80;i++){
+         const xBase=i*(1024/80);
+         const w=4+Math.random()*9;
+         ctx.strokeStyle='#7700ee';
+         ctx.lineWidth=w;
+         ctx.lineCap='round';
+         ctx.beginPath();
+         let y=0;
+         // Linea quasi verticale con leggere ondulazioni morbide
+         ctx.moveTo(xBase+(Math.random()-.5)*6,0);
+         while(y<1024){
+           const step=15+Math.random()*20;
+           y+=step;
+           const xOff=(Math.random()-.5)*8;
+           ctx.lineTo(xBase+xOff,y);
+         }
+         ctx.globalAlpha=Math.random()<.15?0:(.5+Math.random()*.5); // alcune interrotte
+         ctx.stroke();
+       }
+       ctx.globalAlpha=1;
+       return new THREE.CanvasTexture(cv);
+     })();
+     g.add(new THREE.Mesh(new THREE.SphereGeometry(2.2,64,48),new THREE.MeshStandardMaterial({map:ztex,roughness:.2,metalness:.05,color:0xdddddd})));
+     const bm=new THREE.MeshStandardMaterial({color:0x5500aa,roughness:.1,metalness:.05,emissive:0x330066,emissiveIntensity:.4});
+     const gm=new THREE.MeshStandardMaterial({color:0x888888,roughness:.2,metalness:.1,emissive:0x333333,emissiveIntensity:.2});
+     const nBlobsTension=TENSION_BLOBS[currentTension];
+    for(let i=0;i<nBlobsTension;i++){
+       const phi=Math.acos(1-2*(i+.5)/nBlobsTension),theta=Math.PI*(1+Math.sqrt(5))*i;
+       const r=.04+Math.pow(Math.random(),1.2)*.38;
+       const dist=2.2+r*.65; // attaccate alla sfera
+       const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+       const isGray=Math.random()<.1;
+       const m=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),isGray?gm:bm);
+       m.position.set(nx*dist,ny*dist,nz*dist);g.add(m);
+     }
+   }
+  },
+  {name:'ESAGONO', rare:true,
+   build(g){
+     // Gradiente temperatura — colori caldi/freddi per latitudine
+     const tempColors=[0x0000ff,0x0044ff,0x00aaff,0x00ffcc,0x00ff44,0xaaff00,0xffee00,0xff8800,0xff2200];
+     // Sfera bianca
+     const cm=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.3,metalness:.05,emissive:0xdddddd,emissiveIntensity:.1});
+     g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(2.2,3),cm));
+     // Bolle colorate temperatura — sfere complete invece di semisfere
+     for(let i=0;i<60;i++){
+       const phi=Math.acos(1-2*(i+.5)/60),theta=Math.PI*(1+Math.sqrt(5))*i;
+       const r=.1+Math.random()*.28;
+       const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+       const ti=Math.floor((ny+1)/2*(tempColors.length-1));
+       const hm=new THREE.MeshStandardMaterial({color:tempColors[ti],emissive:tempColors[ti],emissiveIntensity:.5,roughness:.15,metalness:.1});
+       const m=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),hm);
+       const dist=2.2+r*.6;
+       m.position.set(nx*dist,ny*dist,nz*dist);g.add(m);
+     }
+     // Spike — base larga sulla sfera, punta verso fuori, tutta piena
+     const pm=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.15,metalness:.3,emissive:0xdddddd,emissiveIntensity:.1});
+     const psm=new THREE.MeshStandardMaterial({color:0xeeeeee,roughness:.2,metalness:.25});
+     for(let i=0;i<400;i++){
+       const phi=Math.acos(1-2*(i+.5)/400),theta=Math.PI*(1+Math.sqrt(5))*i;
+       const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+       const len=.12+Math.random()*.22;
+       const baseR=.04+Math.random()*.03;
+       // ConeGeometry — base larga, punta in alto (y+)
+       // Devo ruotare di 180° così la base tocca la sfera e la punta va fuori
+       const c=new THREE.Mesh(new THREE.ConeGeometry(baseR,len,6),Math.random()<.5?pm:psm);
+       // Posizione: centro del cono a metà spike fuori dalla sfera
+       c.position.set(nx*(2.2+len/2),ny*(2.2+len/2),nz*(2.2+len/2));
+       // Orientamento: asse Y del cono punta verso fuori dalla sfera
+       c.quaternion.setFromUnitVectors(
+         new THREE.Vector3(0,1,0),
+         new THREE.Vector3(nx,ny,nz)
+       );
+       g.add(c);
+     }
+   }
+  },
+  {name:'PENNELLATE', rare:true,
+   build(g){
+     g.add(new THREE.Mesh(new THREE.SphereGeometry(2.2,64,48),new THREE.MeshStandardMaterial({map:makePaintTex(),roughness:.35,metalness:.05})));
+     const bm=new THREE.MeshStandardMaterial({color:0xcc1400,emissive:0x880e00,emissiveIntensity:.5,roughness:.1,metalness:.05});
+     for(let i=0;i<80;i++){const phi=Math.acos(1-2*(i+.5)/80),theta=Math.PI*(1+Math.sqrt(5))*i;const r=.04+Math.random()*.22,dist=2.2+r*.6;const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);const m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),bm);m.position.set(nx*dist,ny*dist,nz*dist);g.add(m);}
+   }
+  },
+  {name:'BOMBATA', rare:true,
+   build(g){
+     const mat=new THREE.MeshStandardMaterial({color:new THREE.Color(.15,.75,.05),roughness:.15,metalness:.05,emissive:new THREE.Color(.05,.35,.0),emissiveIntensity:.35});
+     const geo=new THREE.SphereGeometry(2.2,64,48);const pos=geo.attributes.position;
+     for(let i=0;i<pos.count;i++){const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);const bump=Math.sin(x*2.5)*Math.cos(y*2.5)*Math.sin(z*2.5)*.35;const len=Math.sqrt(x*x+y*y+z*z);pos.setXYZ(i,x+x/len*bump,y+y/len*bump,z+z/len*bump);}geo.computeVertexNormals();
+     g.add(new THREE.Mesh(geo,mat));
+     for(let i=0;i<130;i++){const phi=Math.acos(1-2*(i+.5)/130),theta=Math.PI*(1+Math.sqrt(5))*i;const r=.025+Math.pow(Math.random(),1.2)*.32,dist=2.2+r*.55;const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);const m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat);m.position.set(nx*dist,ny*dist,nz*dist);g.add(m);}
+   }
+  },
+  {name:'INNESTO', rare:true,
+   build(g){
+     const ms=new THREE.MeshStandardMaterial({color:0x222222,roughness:.3,metalness:.15,emissive:0x111111,emissiveIntensity:.2});
+     const mc=new THREE.MeshStandardMaterial({color:0xff5500,roughness:.1,metalness:.15,transparent:true,opacity:.85,side:THREE.DoubleSide,emissive:0xff3300,emissiveIntensity:.8});
+     g.add(new THREE.Mesh(new THREE.BoxGeometry(3.8,3.8,3.8),mc));
+     g.add(new THREE.Mesh(new THREE.SphereGeometry(2.4,64,48),ms));
+     for(let i=0;i<80;i++){const phi=Math.acos(1-2*(i+.5)/80),theta=Math.PI*(1+Math.sqrt(5))*i;const r=.04+Math.pow(Math.random(),1.6)*.28,dist=2.5+r*.9;const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);const m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),ms);m.position.set(nx*dist,ny*dist,nz*dist);g.add(m);}
+   }
+  },
+];
+
+function go(idx){
+  cancelAnimationFrame(animId);
+  if(scene)scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose();});
+  const F=FORMS[idx];
+  const pi=FORM_PAL[idx];
+  const P=pi>=0?PALS[pi]:null;
+  document.getElementById('hud').textContent=(idx+1)+'. '+F.name;
+  document.getElementById('pal').textContent=P?P.name:'RARE';
+  document.querySelectorAll('.sb').forEach((b,i)=>b.classList.toggle('on',i===idx));
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(P?P.bg:0x080808);
+  if(P)scene.fog=new THREE.FogExp2(P.bg,.015);
+
+  const lA=P?P.lA:0xffffff;
+  const lB=P?P.lB:0x555566;
+  const L1=new THREE.SpotLight(lA,700,50,.28,.2);L1.position.set(5,8,10);L1.castShadow=true;scene.add(L1);
+  const L2=new THREE.SpotLight(lB,400,40,.4,.3);L2.position.set(-6,-4,7);scene.add(L2);
+  const L3=new THREE.PointLight(0xffffff,300,20);L3.position.set(0,5,-3);scene.add(L3);
+  scene.add(new THREE.AmbientLight(0x151515));
+
+  group=new THREE.Group();scene.add(group);
+
+  let fragData=[];
+
+  if(F.rare){
+    // Forma rara — build custom, no effetti
+    F.build(group);
+  } else {
+    // Forma originale — colori dalla palette + effetti
+    const matC=new THREE.MeshStandardMaterial({color:P.sphere,roughness:.12,metalness:.05,emissive:P.sphereE,emissiveIntensity:.5});
+    const matB=new THREE.MeshStandardMaterial({color:P.sphere,roughness:.10,metalness:.04,emissive:P.sphereE,emissiveIntensity:.4});
+    const matC1=new THREE.MeshStandardMaterial({color:P.sphere,emissive:P.sphere,emissiveIntensity:1.2,roughness:.02,metalness:.98});
+    const matGray=new THREE.MeshStandardMaterial({color:0x888888,emissive:0x333333,emissiveIntensity:.35,roughness:.4,metalness:.4});
+
+    // ICOSA — sfera spugnosa ruvida
+  if(F.name==='ICOSA'){
+    const geoIco=new THREE.SphereGeometry(2.2,64,48);
+    const posIco=geoIco.attributes.position;
+    for(let i=0;i<posIco.count;i++){
+      const x=posIco.getX(i),y=posIco.getY(i),z=posIco.getZ(i);
+      const bump=(Math.sin(x*12)*Math.cos(y*11)*Math.sin(z*13))*.22+
+                 (Math.sin(x*25+1.3)*Math.cos(z*22+.7)*Math.sin(y*20))*.12+
+                 (Math.sin(x*40)*Math.cos(y*38)*Math.sin(z*42))*.06;
+      const len=Math.sqrt(x*x+y*y+z*z);
+      posIco.setXYZ(i,x+x/len*bump,y+y/len*bump,z+z/len*bump);
+    }
+    geoIco.computeVertexNormals();
+    const matIco=new THREE.MeshStandardMaterial({color:0xeeeeee,roughness:1.0,metalness:.0,emissive:0xbbbbbb,emissiveIntensity:.08});
+    group.add(new THREE.Mesh(geoIco,matIco));
+  } else {
+    group.add(new THREE.Mesh(F.core(2.2),matC));
+  }
+    const nBlobsTension=TENSION_BLOBS[currentTension];
+    for(let i=0;i<nBlobsTension;i++){
+      const phi=Math.acos(1-2*(i+.5)/nBlobsTension),theta=Math.PI*(1+Math.sqrt(5))*i;
+      const r=.03+Math.pow(Math.random(),1.6)*.38,dist=2.2+r*F.blobDist;
+      const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+      const m=new THREE.Mesh(F.blob(r),matB);
+      m.position.set(nx*dist,ny*dist,nz*dist);
+      if(['CUBE','OCTA','ICOSA'].includes(F.name))m.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+      group.add(m);
+    }
+    // Effetti specifici per forma
+    if(SHAPE_ANIMS[F.name])fragData=SHAPE_ANIMS[F.name].frags(group,matC1,matGray);
+  }
+
+  let t=0;
+  function animate(){
+    animId=requestAnimationFrame(animate);t+=.016;
+    group.rotation.y+=.005;group.rotation.x=Math.sin(t*.04)*.04;
+    if(SHAPE_ANIMS[F.name]&&fragData.length)SHAPE_ANIMS[F.name].anim(fragData,t);
+    L1.intensity=650+Math.sin(t*.9)*100;
+    renderer.render(scene,camera);
+  }
+  animate();
+}
+
+window.setTension=function(t){
+  currentTension=t;
+  document.querySelectorAll('#t0,#t1,#t2').forEach((b,i)=>b.classList.toggle('on',i===t));
+  go(document.querySelectorAll('.sb.on')[0]?[...document.querySelectorAll('.sb')].findIndex(b=>b.classList.contains('on')&&!['t0','t1','t2'].includes(b.id)):0);
+};
+window.go=go;
+
+window.startRec=function(){
+  const btn=document.getElementById('rec');
+  const cv=document.getElementById('c');
+  const stream=cv.captureStream(30);
+  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:80000000});
+  const chunks=[];
+  rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  rec.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='atelier-spheres-'+new Date().toISOString().split('T')[0]+'.webm';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    btn.textContent='✅ scaricato!';btn.style.color='#00ff88';
+  };
+  // Cicla tutte e 11 le forme — 3 secondi ognuna = 33 secondi totali
+  let idx=0;
+  go(0);
+  rec.start();
+  btn.textContent='⏺ 33s...';btn.style.color='#ff4444';
+  const interval=setInterval(()=>{
+    idx++;
+    if(idx>=11){clearInterval(interval);setTimeout(()=>rec.stop(),1000);}
+    else go(idx);
+  },3000);
+};
+
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+go(0);
+</script>
+</body>
+</html>

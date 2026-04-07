@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const W=1920,H=1080;
+const cv=document.getElementById('c');
+cv.width=W;cv.height=H;
+cv.style.cssText='width:'+W+'px;height:'+H+'px;display:block';
+
+const PALS=[
+  {name:'CRIMSON',sig:'WAR',bg:0x8a0000,sphere:new THREE.Color(0.80,0.04,0.04),sphereE:new THREE.Color(0.55,0.0,0.0),lA:0xff1111,lB:0x440000},
+  {name:'GOLD',sig:'ECONOMY',bg:0x7fff00,sphere:new THREE.Color(0.855,0.647,0.125),sphereE:new THREE.Color(0.6,0.45,0.08),lA:0xdaa520,lB:0x446600},
+  {name:'NEON',sig:'TECH',bg:0x020810,sphere:new THREE.Color(0.02,0.28,0.20),sphereE:new THREE.Color(0.0,0.18,0.12),lA:0x00ffaa,lB:0x002266},
+  {name:'VIOLET',sig:'POLITICS',bg:0x060010,sphere:new THREE.Color(0.22,0.04,0.48),sphereE:new THREE.Color(0.14,0.0,0.35),lA:0xbb00ff,lB:0xff0088},
+  {name:'YELLOW',sig:'CRISIS',bg:0x1a1500,sphere:new THREE.Color(0.70,0.60,0.0),sphereE:new THREE.Color(0.50,0.40,0.0),lA:0xffdd00,lB:0x886600},
+  {name:'GRAY',sig:'HUMAN',bg:0xff8c00,sphere:new THREE.Color(0.38,0.38,0.38),sphereE:new THREE.Color(0.22,0.22,0.22),lA:0xaaaaaa,lB:0x444444},
+];
+
+const COLS=3, ROWS=2;
+const CW=W/COLS, CH=H/ROWS;
+
+// Creo un renderer e scene per ogni cella
+const renderers=[], scenes=[], cameras=[], groups=[], blobDatas=[];
+
+PALS.forEach((P,i)=>{
+  const offscreen=document.createElement('canvas');
+  offscreen.width=CW; offscreen.height=CH;
+  const r=new THREE.WebGLRenderer({canvas:offscreen,antialias:true,preserveDrawingBuffer:true});
+  r.setSize(CW,CH);
+  r.shadowMap.enabled=true;
+
+  const sc=new THREE.Scene();
+  sc.background=new THREE.Color(P.bg);
+  const L1=new THREE.SpotLight(P.lA,600,40,0.3,0.4);
+  L1.position.set(5,7,8);sc.add(L1);
+  const L2=new THREE.SpotLight(P.lB,300,30,0.5,0.3);
+  L2.position.set(-5,-4,6);sc.add(L2);
+  sc.add(new THREE.AmbientLight(0x111111));
+
+  const cam=new THREE.PerspectiveCamera(60,CW/CH,0.01,100);
+  cam.position.set(0,0,7);cam.lookAt(0,0,0);
+
+  const matC=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.12,metalness:0.05,emissive:P.sphereE,emissiveIntensity:0.5});
+  const matB=new THREE.MeshStandardMaterial({color:P.sphere,roughness:0.10,metalness:0.04,emissive:P.sphereE,emissiveIntensity:0.4});
+  const g=new THREE.Group(); sc.add(g);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(1.8,48,36),matC));
+
+  const bd=[];
+  for(let j=0;j<120;j++){
+    const phi=Math.acos(1-2*(j+0.5)/120);
+    const theta=Math.PI*(1+Math.sqrt(5))*j;
+    const rv=0.03+Math.pow(Math.random(),1.6)*0.32;
+    const dist=1.8+rv*0.85;
+    const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);
+    const m=new THREE.Mesh(new THREE.SphereGeometry(rv,12,8),matB);
+    m.position.set(nx*dist,ny*dist,nz*dist);
+    g.add(m);
+    bd.push({m,nx,ny,nz,dist,ph:j*0.07,sp:0.3+Math.random()*1.2,amp:0.015+Math.random()*0.04});
+  }
+
+  renderers.push(r); scenes.push(sc); cameras.push(cam); groups.push(g); blobDatas.push(bd);
+});
+
+// Canvas 2D per compositing
+const ctx2d=document.createElement('canvas');
+ctx2d.width=W; ctx2d.height=H;
+const ctx=ctx2d.getContext('2d');
+
+// Sostituisco il canvas principale con quello 2D
+document.body.removeChild(cv);
+document.body.appendChild(ctx2d);
+ctx2d.id='mainCanvas';
+ctx2d.style.cssText='display:block;width:'+W+'px;height:'+H+'px';
+
+// Registrazione
+const stream=ctx2d.captureStream(30);
+const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:80000000});
+const chunks=[];
+rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+rec.onstop=()=>{
+  const blob=new Blob(chunks,{type:'video/webm'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='atelier-palette-'+new Date().toISOString().split('T')[0]+'.webm';
+  a.click();
+};
+rec.start();
+
+let t=0;
+function animate(){
+  requestAnimationFrame(animate);
+  t+=0.012;
+
+  // Render ogni sfera nel suo offscreen canvas
+  renderers.forEach((r,i)=>{
+    const g=groups[i], bd=blobDatas[i];
+    g.rotation.y=t*0.08;
+    g.rotation.x=Math.sin(t*0.04)*0.05;
+    bd.forEach(b=>{
+      const pulse=Math.sin(t*b.sp+b.ph)*b.amp;
+      const d=b.dist+pulse;
+      b.m.position.set(b.nx*d,b.ny*d,b.nz*d);
+      b.m.scale.setScalar(1+Math.abs(pulse)*0.8);
+    });
+    r.render(scenes[i],cameras[i]);
+  });
+
+  // Compositing su canvas 2D
+  ctx.fillStyle='#111';
+  ctx.fillRect(0,0,W,H);
+  renderers.forEach((r,i)=>{
+    const col=i%COLS, row=Math.floor(i/COLS);
+    ctx.drawImage(r.domElement,col*CW,row*CH,CW,CH);
+    // Nome
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.fillRect(col*CW,row*CH+CH-50,CW,50);
+    ctx.fillStyle='#ffffff';
+    ctx.font='bold 18px monospace';
+    ctx.textAlign='center';
+    ctx.letterSpacing='6px';
+    ctx.fillText(PALS[i].sig+' · '+PALS[i].name, col*CW+CW/2, row*CH+CH-20);
+  });
+}
+animate();
+
+// Stop dopo 20 secondi
+setTimeout(()=>rec.stop(), 20000);
+</script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+{
+  "entities": [
+    {
+      "name": "Trump",
+      "type": "face",
+      "label": "Trump"
+    },
+    {
+      "name": "Xi",
+      "type": "face",
+      "label": "Xi Jinping"
+    },
+    {
+      "name": "Gaza",
+      "type": "place",
+      "label": "Gaza"
+    },
+    {
+      "name": "Cina",
+      "type": "place",
+      "label": "China"
+    },
+    {
+      "name": "Iran",
+      "type": "place",
+      "label": "Iran"
+    },
+    {
+      "name": "Medio Oriente",
+      "type": "place",
+      "label": "Middle East"
+    },
+    {
+      "name": "mitra",
+      "type": "gun",
+      "label": "Weapons"
+    },
+    {
+      "name": "gold",
+      "type": "gold",
+      "label": "Gold"
+    },
+    {
+      "name": "silver",
+      "type": "silver",
+      "label": "Silver"
+    },
+    {
+      "name": "pharma",
+      "type": "pharma",
+      "label": "Medical Breakthrough"
+    }
+  ],
+  "headlines": [
+    "Little sign of breakthrough as Trump's Iran deadline nears",
+    "Australia's most-decorated living soldier charged over alleged war crimes",
+    "JD Vance due in Hungary to back Orban's re-election bid",
+    "Taiwan opposition leader visits China for expected meeting with Xi Jinping",
+    "Nine policemen sentenced to death in India over Covid custody killings",
+    "Lil Nas X assault case to be dismissed if he completes mental health programme",
+    "Ten killed in Israeli strikes and clashes between Hamas and militia in Gaza, local sources say",
+    "'Really feeling the love' - Savannah Guthrie returns to NBC as search for mother goes on"
+  ],
+  "state": {
+    "speed": 0.03685714285714286,
+    "chaos": 1,
+    "density": 0.29378881987577643,
+    "colorMode": 0.2828571428571428,
+    "pointSize": 0.01572049689440994,
+    "opacity": 0.5688612836438923
+  },
+  "clima": "High global tension. The world burns.",
+  "opere": [
+    {
+      "nome": "Detonation",
+      "desc": "Work one. High global tension. The world burns. Signals: conflict 12, crisis 3, economy 1."
+    },
+    {
+      "nome": "Collapse",
+      "desc": "Work two. Matter reacts. Politics 7, humanity 8."
+    },
+    {
+      "nome": "Impact",
+      "desc": "Work three. Variation. Tech 2, total tension 45%."
+    }
+  ],
+  "signals": {
+    "war": 12,
+    "crisis": 3,
+    "economy": 1,
+    "politics": 7,
+    "human": 8,
+    "tech": 2
+  },
+  "markets": {
+    "markets": [
+      {
+        "name": "S&P 500",
+        "price": 6612,
+        "change": 0.44
+      },
+      {
+        "name": "Nikkei",
+        "price": 53430,
+        "change": 0.03
+      },
+      {
+        "name": "FTSE",
+        "price": 10451,
+        "change": 0.14
+      }
+    ],
+    "avgChange": 0.2,
+    "isUp": true
+  },
+  "metals": [
+    {
+      "name": "Gold",
+      "price": 4687.3,
+      "change": 0.65
+    },
+    {
+      "name": "Silver",
+      "price": 72.74,
+      "change": 0.11
+    }
+  ],
+  "eth": {
+    "price": 2112,
+    "change24h": -1.17
+  },
+  "btc": {
+    "price": 68786,
+    "change24h": -0.55
+  }
+}

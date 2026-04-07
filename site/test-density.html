@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<title>ATELIER AI — DENSITY TEST</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Courier New',monospace}
+canvas{display:block;position:fixed;inset:0}
+#hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
+#hud .title{font-size:14px;font-weight:700;letter-spacing:3px;color:#fff;text-transform:uppercase}
+#hud .sub{font-size:9px;letter-spacing:3px;color:rgba(255,255,255,0.35);margin-top:4px;text-transform:uppercase}
+#controls{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:12px;align-items:center}
+.label{font-size:8px;letter-spacing:3px;color:rgba(255,255,255,0.3);text-transform:uppercase}
+input[type=range]{width:200px;accent-color:#ff2d78}
+.val{font-size:12px;font-weight:700;color:#ff2d78;min-width:30px;text-align:center;font-family:'Courier New',monospace}
+#presets{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px}
+.pb{font-family:'Courier New',monospace;font-size:8px;letter-spacing:3px;text-transform:uppercase;padding:5px 14px;border:0.5px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.5);color:rgba(255,255,255,0.4);cursor:pointer;transition:all .2s}
+.pb:hover,.pb.on{color:#fff;border-color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.07)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="title">DENSITY TEST</div>
+  <div class="sub" id="hsub">Tensione: CALMA · Bolle: 40</div>
+</div>
+<div id="presets">
+  <button class="pb" onclick="setPreset(0)">CALMA</button>
+  <button class="pb" onclick="setPreset(1)">MEDIA</button>
+  <button class="pb" onclick="setPreset(2)">INTENSA</button>
+  <button class="pb on" onclick="setPreset(3)">CRITICA</button>
+</div>
+<div id="controls">
+  <span class="label">BOLLE</span>
+  <input type="range" id="slider" min="20" max="300" value="200" oninput="onSlider(this.value)"/>
+  <span class="val" id="sliderVal">200</span>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+
+const PRESETS=[
+  {name:'CALMA',   n:40,  color:new THREE.Color(0.02,0.25,0.18), emissive:new THREE.Color(0.0,0.15,0.10), tension:1},
+  {name:'MEDIA',   n:100, color:new THREE.Color(0.52,0.12,0.02), emissive:new THREE.Color(0.40,0.06,0.0), tension:4},
+  {name:'INTENSA', n:180, color:new THREE.Color(0.52,0.04,0.12), emissive:new THREE.Color(0.38,0.0,0.08), tension:7},
+  {name:'CRITICA', n:260, color:new THREE.Color(0.22,0.04,0.48), emissive:new THREE.Color(0.14,0.0,0.35), tension:10},
+];
+
+let renderer, camera, scene, animId, clock;
+let currentN=200, currentPreset=3;
+
+function init(){
+  const cv=document.getElementById('c');
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true;
+  clock=new THREE.Clock();
+  camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.01,200);
+  camera.position.set(0,0,8);
+  camera.lookAt(0,0,0);
+  buildScene(currentN, PRESETS[currentPreset]);
+  window.addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+  });
+}
+
+function buildScene(n, preset){
+  cancelAnimationFrame(animId);
+  if(scene) scene.traverse(o=>{
+    if(o.geometry)o.geometry.dispose();
+    if(o.material)o.material.dispose();
+  });
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x000000);
+
+  // LUCI
+  const L1=new THREE.SpotLight(0xffffff,600,50,0.3,0.4);
+  L1.position.set(6,8,10);L1.castShadow=true;
+  L1.shadow.mapSize.set(1024,1024);scene.add(L1);
+  const L2=new THREE.SpotLight(0x4400ff,300,40,0.5,0.3);
+  L2.position.set(-6,-5,8);scene.add(L2);
+  scene.add(new THREE.AmbientLight(0x111111));
+
+  const matCore=new THREE.MeshStandardMaterial({
+    color:preset.color,roughness:0.12,metalness:0.05,
+    emissive:preset.emissive,emissiveIntensity:0.4});
+  const matBub=new THREE.MeshStandardMaterial({
+    color:preset.color,roughness:0.10,metalness:0.04,
+    emissive:preset.emissive,emissiveIntensity:0.3});
+
+  const group=new THREE.Group();
+  scene.add(group);
+
+  // Core
+  group.add(new THREE.Mesh(new THREE.SphereGeometry(2.0,64,48),matCore));
+
+  // Bolle — densità da n
+  const blobData=[];
+  for(let i=0;i<n;i++){
+    const phi=Math.acos(1-2*(i+0.5)/n);
+    const theta=Math.PI*(1+Math.sqrt(5))*i;
+    // dimensione bolle scala con tensione
+    const maxR=0.08+preset.tension*0.045;
+    const r=0.03+Math.pow(Math.random(),1.6)*maxR;
+    const dist=2.0+r*0.85;
+    const nx=Math.sin(phi)*Math.cos(theta);
+    const ny=Math.cos(phi);
+    const nz=Math.sin(phi)*Math.sin(theta);
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r,14,10),matBub);
+    m.position.set(nx*dist,ny*dist,nz*dist);
+    group.add(m);
+    blobData.push({m,nx,ny,nz,r,dist,
+      ph:i*0.07,sp:0.3+Math.random()*1.5,amp:0.015+Math.random()*0.04});
+
+    // sotto-bolle sui punti ad alta tensione
+    if(preset.tension>=7 && r>0.15 && Math.random()<0.6){
+      const r2=r*(0.3+Math.random()*0.3);
+      const m2=new THREE.Mesh(new THREE.SphereGeometry(r2,10,7),matBub);
+      m2.position.set(nx*(dist+r2*0.5),ny*(dist+r2*0.5),nz*(dist+r2*0.5));
+      group.add(m2);
+      blobData.push({m:m2,nx,ny,nz,r:r2,dist:dist+r2*0.5,
+        ph:i*0.09+1,sp:0.2+Math.random()*1.0,amp:0.01+Math.random()*0.03});
+    }
+  }
+
+  // Bolle fluttuanti extra in alta tensione
+  const nFloat=Math.floor(preset.tension*1.5);
+  for(let i=0;i<nFloat;i++){
+    const r=0.05+Math.random()*0.25;
+    const phi2=Math.random()*Math.PI, theta2=Math.random()*Math.PI*2;
+    const dist2=2.6+Math.random()*2.0;
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r,12,8),matBub);
+    m.position.set(Math.sin(phi2)*Math.cos(theta2)*dist2,Math.cos(phi2)*dist2,Math.sin(phi2)*Math.sin(theta2)*dist2);
+    group.add(m);
+    blobData.push({m,nx:Math.sin(phi2)*Math.cos(theta2),ny:Math.cos(phi2),nz:Math.sin(phi2)*Math.sin(theta2),
+      r,dist:dist2,ph:Math.random()*6.28,sp:0.15+Math.random()*0.4,amp:0.06+Math.random()*0.18,floating:true});
+  }
+
+  document.getElementById('hsub').textContent=`Tensione: ${preset.name} · Bolle: ${n} + ${nFloat} fluttuanti`;
+
+  let t=0;
+  function animate(){
+    animId=requestAnimationFrame(animate);
+    t+=0.012;
+    group.rotation.y=t*0.07;
+    group.rotation.x=Math.sin(t*0.04)*0.05;
+
+    blobData.forEach(b=>{
+      const pulse=Math.sin(t*b.sp+b.ph)*b.amp;
+      const d=b.dist+pulse*(b.floating?3:1);
+      b.m.position.set(b.nx*d,b.ny*d,b.nz*d);
+      b.m.scale.setScalar(1+Math.abs(pulse)*(b.floating?2:1));
+    });
+
+    L1.intensity=550+Math.sin(t*0.9)*100;
+    camera.position.x=Math.sin(t*0.03)*0.4;
+    camera.position.y=Math.cos(t*0.025)*0.3;
+    camera.lookAt(0,0,0);
+    renderer.render(scene,camera);
+  }
+  animate();
+}
+
+window.setPreset=function(i){
+  currentPreset=i;
+  currentN=PRESETS[i].n;
+  document.getElementById('slider').value=currentN;
+  document.getElementById('sliderVal').textContent=currentN;
+  document.querySelectorAll('.pb').forEach((b,j)=>b.classList.toggle('on',j===i));
+  buildScene(currentN,PRESETS[i]);
+};
+
+window.onSlider=function(v){
+  currentN=parseInt(v);
+  document.getElementById('sliderVal').textContent=currentN;
+  // trova preset più vicino
+  const dists=PRESETS.map((p,i)=>({i,d:Math.abs(p.n-currentN)}));
+  const closest=dists.sort((a,b)=>a.d-b.d)[0].i;
+  document.querySelectorAll('.pb').forEach((b,j)=>b.classList.toggle('on',j===closest));
+  buildScene(currentN,PRESETS[closest]);
+};
+
+init();
+setPreset(3);
+</script>
+
+<div style="position:fixed;top:16px;right:16px;z-index:200">
+  <button id="recBtn" onclick="startRec()" style="font-family:'Courier New',monospace;font-size:9px;letter-spacing:3px;text-transform:uppercase;padding:8px 18px;border:0.5px solid rgba(255,255,255,0.5);background:rgba(0,0,0,0.8);color:#fff;cursor:pointer">⏺ REC 20s</button>
+</div>
+<script>
+function startRec(){
+  const btn=document.getElementById('recBtn');
+  btn.textContent='⏺ recording...';
+  btn.style.color='#ff4444';
+  const cv=document.getElementById('c');
+  const stream=cv.captureStream(30);
+  const rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:80000000});
+  const chunks=[];
+  rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  rec.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='atelier-density-'+new Date().toISOString().split('T')[0]+'.webm';
+    a.click();
+    btn.textContent='✅ scaricato!';
+    btn.style.color='#00ff88';
+  };
+  rec.start();
+  setTimeout(()=>rec.stop(),20000);
+}
+</script>
+</body>
+</html>

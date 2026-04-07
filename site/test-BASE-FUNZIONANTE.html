@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"/><style>*{margin:0;padding:0}body{overflow:hidden}</style></head>
+<body>
+<script type="module">
+import * as THREE from '/three.module.js';
+const W=window.innerWidth,H=window.innerHeight;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+document.body.appendChild(renderer.domElement);
+
+// SFONDO SFUMATO
+const bgScene=new THREE.Scene();
+const bgCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const bgMat=new THREE.ShaderMaterial({
+  uniforms:{t:{value:0}},
+  vertexShader:`varying vec2 v;void main(){v=uv;gl_Position=vec4(position,1.);}`,
+  fragmentShader:`varying vec2 v;uniform float t;
+  void main(){
+    vec3 a=vec3(.8,.25,.4+sin(t*.08)*.05);
+    vec3 b=vec3(.15,.08,.55+cos(t*.06)*.04);
+    vec3 c=mix(a,b,v.x*.8+v.y*.4+sin(t*.05)*.1);
+    c*=.8-length(v-.5)*.3;
+    gl_FragColor=vec4(c,1.);
+  }`,
+  depthWrite:false
+});
+bgScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),bgMat));
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(65,W/H,.1,300);
+camera.position.set(0,0,18);
+scene.add(new THREE.AmbientLight(0x444444,.5));
+const L1=new THREE.PointLight(0xff2200,50,60);scene.add(L1);
+const L2=new THREE.PointLight(0xffffff,30,50);L2.position.set(-8,4,5);scene.add(L2);
+const L3=new THREE.PointLight(0x4400ff,20,40);L3.position.set(3,-4,-3);scene.add(L3);
+
+const world=new THREE.Group();
+scene.add(world);
+
+// PALETTE KIM — colori saturi
+const COLS=[0xff2200,0xffcc00,0x00ffcc,0x8800ff,0xff00aa,0x00aaff,0xffff00,0xff6600,0x00ff44,0xaaaaff];
+function kimMat(i){
+  const c=COLS[i%COLS.length];
+  return new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:.65,roughness:.04,metalness:.96});
+}
+function pakMat(i){
+  const h=i*.08;
+  const c=new THREE.Color().setHSL(h,.3,.45);
+  return new THREE.MeshStandardMaterial({color:c,roughness:.1,metalness:.92});
+}
+
+const objs=[];
+
+// 5 ANELLI ORBITALI — come sistema planetario meccanico
+// ogni anello ha elementi che lo percorrono
+const RINGS=5;
+for(let ring=0;ring<RINGS;ring++){
+  const ringR=2.5+ring*1.8; // raggio dell'orbita
+  const nItems=12+ring*8;   // più elementi negli anelli esterni
+  const inclX=ring*.35;
+  const inclZ=ring*.28;
+
+  for(let i=0;i<nItems;i++){
+    const angle=i/nItems*Math.PI*2;
+    const isKim=i%3===0;
+    const isCone=i%2===0;
+
+    let mesh;
+    if(isCone){
+      const len=.3+Math.random()*1.8+ring*.3;
+      const r=.012+Math.random()*.035;
+      mesh=new THREE.Mesh(
+        new THREE.ConeGeometry(r,len,5),
+        isKim?kimMat(i+ring*3):pakMat(i+ring*2)
+      );
+    } else {
+      const len=.4+Math.random()*2.5+ring*.4;
+      const r=.015+Math.random()*.04;
+      mesh=new THREE.Mesh(
+        new THREE.CylinderGeometry(r,r,len,7),
+        isKim?kimMat(i+ring*2+2):pakMat(i+ring*3+1)
+      );
+    }
+
+    // posizione sull'anello
+    mesh.position.set(
+      Math.cos(angle)*ringR,
+      Math.sin(angle*1.3)*(ring*.4),
+      Math.sin(angle)*ringR
+    );
+    mesh.rotation.set(
+      Math.random()*Math.PI,
+      angle,
+      Math.random()*Math.PI*.5
+    );
+
+    world.add(mesh);
+    objs.push({
+      m:mesh,ring,
+      angle,ringR,inclX,inclZ,
+      // velocità orbitale — anelli alternano direzione
+      orbitV:(.008+ring*.003)*(ring%2===0?1:-1),
+      // rotazione propria
+      rx:(Math.random()-.5)*.018,
+      ry:(Math.random()-.5)*.025,
+      rz:(Math.random()-.5)*.012,
+      phase:Math.random()*Math.PI*2,
+      pv:.4+Math.random()*1.5,
+      // scala pulsante
+      sv:.5+Math.random()*1.5,
+      isKim,isCone
+    });
+  }
+}
+
+// MASSA CENTRALE — cuore del meccanismo
+// sfere e cubi che pulsano al centro
+for(let i=0;i<20;i++){
+  const r=.06+Math.random()*.35;
+  const isSphere=Math.random()<.5;
+  const geo=isSphere?
+    new THREE.SphereGeometry(r,12,8):
+    new THREE.BoxGeometry(r,r*(1+Math.random()*3),r);
+  const mat=i%3===0?kimMat(i):pakMat(i+5);
+  const m=new THREE.Mesh(geo,mat);
+  m.position.set((Math.random()-.5)*3,(Math.random()-.5)*3,(Math.random()-.5)*2);
+  m.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+  world.add(m);
+  objs.push({
+    m,ring:-1,
+    ox:m.position.x,oy:m.position.y,oz:m.position.z,
+    rx:(Math.random()-.5)*.02,ry:(Math.random()-.5)*.03,rz:(Math.random()-.5)*.015,
+    ov:(Math.random()-.5)*.006,or:.1+Math.random()*.4,
+    phase:Math.random()*Math.PI*2,pv:.8+Math.random()*2,sv:.4+Math.random()*1.2,
+    isKim:i%3===0
+  });
+}
+
+let t=0;
+function animate(){
+  requestAnimationFrame(animate);
+  t+=.016;
+  bgMat.uniforms.t.value=t;
+
+  objs.forEach(o=>{
+    if(o.ring>=0){
+      // ORBITA sull'anello — avanza l'angolo
+      o.angle+=o.orbitV;
+      const R=o.ringR;
+      // posizione orbitale con inclinazione
+      const x=Math.cos(o.angle)*R;
+      const y=Math.sin(o.angle*1.3)*(o.ring*.4)+Math.sin(t*.3+o.phase)*.3;
+      const z=Math.sin(o.angle)*R;
+      o.m.position.set(x,y,z);
+      // rotazione propria
+      o.m.rotation.x+=o.rx;
+      o.m.rotation.y+=o.ry;
+      o.m.rotation.z+=o.rz;
+      // scala pulsante — si allunga/accorcia
+      if(o.isCone){
+        o.m.scale.y=.3+Math.abs(Math.sin(t*o.pv*.3+o.phase))*o.sv;
+      } else {
+        const p=.8+Math.sin(t*o.pv*.4+o.phase)*.3;
+        o.m.scale.x=p;o.m.scale.z=p;
+      }
+    } else {
+      // MASSA CENTRALE
+      o.m.rotation.x+=o.rx;o.m.rotation.y+=o.ry;o.m.rotation.z+=o.rz;
+      const a=t*o.ov+o.phase;
+      o.m.position.x=o.ox+Math.sin(a)*o.or;
+      o.m.position.y=o.oy+Math.cos(a*1.3)*o.or*.8;
+      const sc=.5+Math.abs(Math.sin(t*o.pv*.3+o.phase))*o.sv;
+      o.m.scale.setScalar(sc);
+    }
+    // emissione Kim che pulsa
+    if(o.isKim){
+      o.m.material.emissiveIntensity=.5+Math.sin(t*2.5+o.phase)*.2;
+    }
+  });
+
+  // LUCI
+  L1.position.set(Math.sin(t*.15)*8,4+Math.cos(t*.1)*3,8+Math.sin(t*.08)*2);
+  L1.intensity=45+Math.sin(t*1.5)*15;
+  L2.position.set(Math.cos(t*.12)*-8,3,5+Math.sin(t*.1)*3);
+  L3.position.set(3+Math.sin(t*.08)*4,-4,Math.cos(t*.07)*3-3);
+
+  // WORLD — inclina leggermente, ruota lentamente
+  world.rotation.y+=.003;
+  world.rotation.x=Math.sin(t*.05)*.06;
+
+  camera.position.x=Math.sin(t*.02)*2;
+  camera.position.y=Math.cos(t*.016)*.8;
+  camera.lookAt(0,0,0);
+
+  renderer.autoClear=false;
+  renderer.clear();
+  renderer.render(bgScene,bgCam);
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>

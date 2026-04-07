@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Atelier AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#eeeeee;color:#111;font-family:'Helvetica Neue',sans-serif;text-align:center}
+h1{margin:30px 0 6px;font-weight:200;font-size:1.8rem;letter-spacing:.3em;color:#111}
+#clima{font-size:.85rem;color:#333;margin-bottom:8px;font-style:italic}
+#markets-bar{font-size:.72rem;margin-bottom:6px;letter-spacing:.1em}
+.market-item{display:inline-block;margin:0 8px}
+#metals-bar{font-size:.68rem;margin-bottom:6px;color:#888}
+#news-bar{width:70%;margin:0 auto 10px;text-align:left}
+.news-title{font-size:.55rem;color:#555;letter-spacing:.2em;text-transform:uppercase;margin-bottom:5px;text-align:center}
+.news-item{font-size:.6rem;color:#333;margin-bottom:3px;line-height:1.4}
+.entity-bar{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.entity{font-size:.55rem;color:#111;border:1px solid #999;padding:2px 6px}
+#controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+button{background:transparent;border:1px solid #222;color:#111;padding:8px 16px;cursor:pointer;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase}
+button:hover{background:#222;color:#eee}
+#status{font-size:.7rem;color:#555;margin-bottom:10px;min-height:16px}
+.wrap{overflow:hidden;border-radius:2px;background:#000}
+.signal-bar{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin:12px 0 40px}
+.signal{font-size:.55rem;color:#555;padding:2px 6px;border:1px solid #bbb}
+.signal span{color:#111;font-weight:500}
+</style>
+</head>
+<body>
+<h1>ATELIER AI</h1>
+<div id="clima">Moderate tension. Unstable equilibrium.</div>
+<div id="markets-bar">
+  <span class="market-item" style="color:#0044cc">S&P 500 ▲ 0.11%</span><span class="market-item" style="color:#0044cc">FTSE ▲ 0.69%</span>
+</div>
+<div id="metals-bar">
+  <span style="color:#cc9900">Gold $4651.5 ▼ 2.75%</span>
+  &nbsp;|&nbsp;
+  <span style="color:#888">Silver $72.74 ▼ 4.13%</span>
+</div>
+<div id="news-bar">
+  <div class="news-title">Today's headlines</div>
+  <div class="news-item">• How elite US teams tackle combat rescue missions</div><div class="news-item">• Artemis II crew take 'spectacular' image of Earth</div><div class="news-item">• Burkina Faso must 'forget' about democracy, military leader says</div><div class="news-item">• French-owned ship passes through Strait of Hormuz</div><div class="news-item">• France's Muslim gathering ban overturned by courts</div>
+  <div class="entity-bar">
+    <span class="entity">Trump</span><span class="entity">Warship</span><span class="entity">Iran</span><span class="entity">Gold</span><span class="entity">Silver</span>
+  </div>
+</div>
+<div id="controls">
+  <button id="btn-generate">GENERATE TODAY</button>
+  <button id="btn-regen">REGENERATE</button>
+  <button onclick="scarica()">DOWNLOAD</button>
+</div>
+<div id="status"></div>
+<div class="wrap" id="top" style="width:80%;margin:0 auto 12px"></div>
+<div style="width:80%;margin:0 auto 8px;text-align:left;display:flex;justify-content:space-between">
+  <div style="font-size:.7rem;color:#333;letter-spacing:.2em;text-transform:uppercase">Drift</div>
+  <div style="font-size:.6rem;color:#666">Pressure &nbsp; Before the Crash</div>
+</div>
+<div class="signal-bar">
+  <div class="signal">War <span>9</span></div>
+  <div class="signal">Crisis <span>4</span></div>
+  <div class="signal">Economy <span>8</span></div>
+  <div class="signal">Politics <span>9</span></div>
+  <div class="signal">Human <span>5</span></div>
+  <div class="signal">Tech <span>5</span></div>
+</div>
+
+<script type="module">
+import * as THREE from '/three.module.js';
+
+const SIG={"war":9,"crisis":5,"economy":8,"politics":9,"human":5,"tech":6};
+const MARKETS={"markets":[{"name":"S&P 500","price":6583,"change":0.11},{"name":"Nikkei","price":53123,"change":1.26},{"name":"FTSE","price":10436,"change":0.69}],"avgChange":0.69,"isUp":true};
+const METALS=[{"name":"Gold","price":4651.5,"change":-2.75},{"name":"Silver","price":72.74,"change":-4.13}];
+const ENTITIES=[{"name":"Trump","type":"face","label":"Trump"},{"name":"nave","type":"ship","label":"Warship"},{"name":"Iran","type":"place","label":"Iran"},{"name":"gold","type":"gold","label":"Gold"},{"name":"silver","type":"silver","label":"Silver"}];
+const IS_UP=true;
+const ETH_I=0.334;
+const N_GOLD=20;
+const N_SILVER=18;
+const HAS_PHARMA=false;
+const HAS_SHIP=true;
+const HAS_DRONE=false;
+const HAS_TANK=false;
+const HAS_BOMB=false;
+const HAS_PLANE=false;
+const HAS_SAT=false;
+
+function choosePalette(){
+  if(SIG.war>=8)return 0;
+  if(SIG.economy>=7&&IS_UP)return 2;
+  if(SIG.tech>=7)return 1;
+  if(SIG.politics>=7&&SIG.crisis>=5)return 3;
+  return 4;
+}
+
+
+
+(function startSite(){
+  var container=document.getElementById('top');
+  if(!container)return;
+  var W=container.clientWidth;
+  var H=Math.round(W*.6667);
+  container.style.height=H+'px';
+  var cv=document.createElement('canvas');
+  container.appendChild(cv);
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(W,H);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  clock=new THREE.Clock();
+  camera=new THREE.PerspectiveCamera(65,W/H,.01,300);
+  camera.position.set(0,2,13);
+  camera.lookAt(0,0,0);
+  palIdx=choosePalette();
+  buildScene();
+  window.addEventListener('resize',function(){
+    var W2=container.clientWidth;
+    var H2=Math.round(W2*.6667);
+    container.style.height=H2+'px';
+    camera.aspect=W2/H2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W2,H2);
+  });
+})();
+
+document.getElementById('btn-generate').onclick=async function(){
+  document.getElementById('status').textContent='Loading...';
+  try{await fetch('/run-brain');location.reload();}
+  catch(e){document.getElementById('status').textContent='Error.';}
+};
+
+document.getElementById('btn-regen').onclick=function(){
+  palIdx=(palIdx+1)%PALS.length;
+  var s=document.getElementById('status');
+  s.textContent='● '+PALS[palIdx].name;
+  setTimeout(function(){s.textContent='';},1800);
+  setPal(palIdx);
+};
+
+window.scarica=function(){
+  var today=new Date().toISOString().split('T')[0];
+  var cv=document.querySelector('#top canvas');
+  if(!cv)return;
+  var status=document.getElementById('status');
+  status.textContent='⏺ Recording 30s...';
+  var stream=cv.captureStream(30);
+  var rec=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:50000000});
+  var chunks=[];
+  rec.ondataavailable=function(e){if(e.data.size>0)chunks.push(e.data);};
+  rec.onstop=function(){
+    var blob=new Blob(chunks,{type:'video/webm'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='atelier-'+today+'.webm';
+    a.click();
+    status.textContent='✅ Downloaded!';
+  };
+  rec.start();
+  setTimeout(function(){rec.stop();},30000);
+};
+</script>
+</body>
+</html>
