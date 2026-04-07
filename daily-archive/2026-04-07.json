@@ -31,11 +31,6 @@
       "label": "Middle East"
     },
     {
-      "name": "mitra",
-      "type": "gun",
-      "label": "Weapons"
-    },
-    {
       "name": "gold",
       "type": "gold",
       "label": "Gold"
@@ -52,44 +47,44 @@
     }
   ],
   "headlines": [
-    "Little sign of breakthrough as Trump's Iran deadline nears",
     "Australia's most-decorated living soldier charged over alleged war crimes",
-    "JD Vance due in Hungary to back Orban's re-election bid",
+    "JD Vance arrives in Hungary to back Orbán's re-election bid",
+    "Music giant Universal gets $64bn takeover offer",
+    "One dead as high-speed train collides with lorry in France",
     "Taiwan opposition leader visits China for expected meeting with Xi Jinping",
+    "Former Migos rapper Offset shot in Florida - reports",
     "Nine policemen sentenced to death in India over Covid custody killings",
-    "Lil Nas X assault case to be dismissed if he completes mental health programme",
-    "Ten killed in Israeli strikes and clashes between Hamas and militia in Gaza, local sources say",
-    "'Really feeling the love' - Savannah Guthrie returns to NBC as search for mother goes on"
+    "Lil Nas X assault case to be dismissed if he completes mental health programme"
   ],
   "state": {
-    "speed": 0.03685714285714286,
+    "speed": 0.036875000000000005,
     "chaos": 1,
-    "density": 0.29378881987577643,
-    "colorMode": 0.2828571428571428,
-    "pointSize": 0.01572049689440994,
-    "opacity": 0.5688612836438923
+    "density": 0.30267857142857146,
+    "colorMode": 0.25625,
+    "pointSize": 0.015202380952380952,
+    "opacity": 0.5720238095238095
   },
   "clima": "High global tension. The world burns.",
   "opere": [
     {
+      "nome": "Fracture",
+      "desc": "Work one. High global tension. The world burns. Signals: conflict 12, crisis 1, economy 1."
+    },
+    {
       "nome": "Detonation",
-      "desc": "Work one. High global tension. The world burns. Signals: conflict 12, crisis 3, economy 1."
+      "desc": "Work two. Matter reacts. Politics 7, humanity 7."
     },
     {
       "nome": "Collapse",
-      "desc": "Work two. Matter reacts. Politics 7, humanity 8."
-    },
-    {
-      "nome": "Impact",
-      "desc": "Work three. Variation. Tech 2, total tension 45%."
+      "desc": "Work three. Variation. Tech 2, total tension 43%."
     }
   ],
   "signals": {
     "war": 12,
-    "crisis": 3,
+    "crisis": 1,
     "economy": 1,
     "politics": 7,
-    "human": 8,
+    "human": 7,
     "tech": 2
   },
   "markets": {
@@ -106,31 +101,31 @@
       },
       {
         "name": "FTSE",
-        "price": 10451,
-        "change": 0.14
+        "price": 10452,
+        "change": 0.15
       }
     ],
-    "avgChange": 0.2,
+    "avgChange": 0.21,
     "isUp": true
   },
   "metals": [
     {
       "name": "Gold",
-      "price": 4687.3,
-      "change": 0.65
+      "price": 4694.5,
+      "change": 0.81
     },
     {
       "name": "Silver",
-      "price": 72.74,
-      "change": 0.11
+      "price": 72.53,
+      "change": -0.19
     }
   ],
   "eth": {
-    "price": 2112,
-    "change24h": -1.17
+    "price": 2099,
+    "change24h": -2.57
   },
   "btc": {
-    "price": 68786,
-    "change24h": -0.55
+    "price": 68539,
+    "change24h": -1.91
   }
 }
