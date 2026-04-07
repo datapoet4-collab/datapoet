@@ -53,8 +53,8 @@
     "US journalist Shelly Kittleson to be released after kidnap in Iraq, militia says",
     "French couple leave Iran after more than three years in jail",
     "JD Vance backs Orbán's re-election bid in Budapest visit and hits out at EU",
-    "One gunman killed and two injured in shooting at Israeli consulate in Istanbul",
-    "WHO suspends Gaza medical evacuations after contractor killed by Israeli troops"
+    "Plan to scrap presidential elections puts Zimbabweans at loggerheads",
+    "One gunman killed and two injured in shooting at Israeli consulate in Istanbul"
   ],
   "state": {
     "speed": 0.039411764705882354,
@@ -111,21 +111,21 @@
   "metals": [
     {
       "name": "Gold",
-      "price": 4800,
-      "change": 3.08
+      "price": 4841.6,
+      "change": 3.97
     },
     {
       "name": "Silver",
-      "price": 75.13,
-      "change": 3.4
+      "price": 76.64,
+      "change": 5.47
     }
   ],
   "eth": {
-    "price": 2208,
-    "change24h": 4.59
+    "price": 2224,
+    "change24h": 5.97
   },
   "btc": {
-    "price": 71241,
-    "change24h": 3.4
+    "price": 71423,
+    "change24h": 4.05
   }
 }

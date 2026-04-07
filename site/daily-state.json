@@ -1,43 +1,131 @@
 {
-  "date": "2009-01-03",
-  "simulated": true,
-  "signals": {
-    "war": 0,
-    "crisis": 1,
-    "economy": 2,
-    "politics": 11,
-    "human": 9,
-    "tech": 1
+  "entities": [
+    {
+      "name": "Trump",
+      "type": "face",
+      "label": "Trump"
+    },
+    {
+      "name": "Gaza",
+      "type": "place",
+      "label": "Gaza"
+    },
+    {
+      "name": "Cina",
+      "type": "place",
+      "label": "China"
+    },
+    {
+      "name": "Iran",
+      "type": "place",
+      "label": "Iran"
+    },
+    {
+      "name": "Medio Oriente",
+      "type": "place",
+      "label": "Middle East"
+    },
+    {
+      "name": "mitra",
+      "type": "gun",
+      "label": "Weapons"
+    },
+    {
+      "name": "gold",
+      "type": "gold",
+      "label": "Gold"
+    },
+    {
+      "name": "silver",
+      "type": "silver",
+      "label": "Silver"
+    },
+    {
+      "name": "pharma",
+      "type": "pharma",
+      "label": "Medical Breakthrough"
+    }
+  ],
+  "headlines": [
+    "Tracking recent US-Israeli strikes on Iranian infrastructure",
+    "Wireless Festival cancelled after Kanye West blocked from coming to UK",
+    "Has Artemis II shown we can land on the Moon again?",
+    "US journalist Shelly Kittleson to be released after kidnap in Iraq, militia says",
+    "French couple leave Iran after more than three years in jail",
+    "JD Vance backs Orbán's re-election bid in Budapest visit and hits out at EU",
+    "Plan to scrap presidential elections puts Zimbabweans at loggerheads",
+    "One gunman killed and two injured in shooting at Israeli consulate in Istanbul"
+  ],
+  "state": {
+    "speed": 0.039411764705882354,
+    "chaos": 1,
+    "density": 0.305531167690957,
+    "colorMode": 0.19411764705882356,
+    "pointSize": 0.016397717295873575,
+    "opacity": 0.5856014047410009
   },
-  "clima": "Political tension rises.",
+  "clima": "High global tension. The world burns.",
+  "opere": [
+    {
+      "nome": "Line of Fire",
+      "desc": "Work one. High global tension. The world burns. Signals: conflict 13, crisis 3, economy 1."
+    },
+    {
+      "nome": "Fracture",
+      "desc": "Work two. Matter reacts. Politics 8, humanity 5."
+    },
+    {
+      "nome": "Detonation",
+      "desc": "Work three. Variation. Tech 2, total tension 50%."
+    }
+  ],
+  "signals": {
+    "war": 13,
+    "crisis": 3,
+    "economy": 1,
+    "politics": 8,
+    "human": 5,
+    "tech": 2
+  },
+  "markets": {
+    "markets": [
+      {
+        "name": "S&P 500",
+        "price": 6617,
+        "change": 0.08
+      },
+      {
+        "name": "Nikkei",
+        "price": 0,
+        "change": -100
+      },
+      {
+        "name": "FTSE",
+        "price": 0,
+        "change": -100
+      }
+    ],
+    "avgChange": 0.08,
+    "isUp": true
+  },
   "metals": [
     {
       "name": "Gold",
-      "price": 880,
-      "change": 0
+      "price": 4841.6,
+      "change": 3.97
     },
     {
       "name": "Silver",
-      "price": 11,
-      "change": 0
+      "price": 76.64,
+      "change": 5.47
     }
   ],
   "eth": {
-    "price": 0,
-    "change24h": 0
+    "price": 2224,
+    "change24h": 5.97
   },
   "btc": {
-    "price": 0.001,
-    "change24h": 0
-  },
-  "headlines": [
-    "Historical data for 2009-01-03"
-  ],
-  "entities": [],
-  "opere": [
-    {
-      "nome": "Simulated",
-      "desc": "Simulated work for 2009-01-03"
-    }
-  ]
+    "price": 71423,
+    "change24h": 4.05
+  }
 }
