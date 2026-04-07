@@ -28,20 +28,20 @@ button:hover{background:#222;color:#eee}
 </head>
 <body>
 <h1>DATA POET</h1>
-<div id="clima">High global tension. The world burns.</div>
+<div id="clima">Political tension rises.</div>
 <div id="markets-bar">
   <span class="market-item" style="color:#0044cc">S&P 500 ▲ 0.11%</span><span class="market-item" style="color:#0044cc">FTSE ▲ 0.69%</span>
 </div>
 <div id="metals-bar">
-  <span style="color:#cc9900">Gold $4694.5 ▲ 0.81%</span>
+  <span style="color:#cc9900">Gold $880 ▼ 0.00%</span>
   &nbsp;|&nbsp;
   <span style="color:#3388ff">ETH $<span id="eth-price">--</span> <span id="eth-bull"></span></span> &nbsp;
   <span style="color:#ff8800">BTC $<span id="btc-price">--</span> <span id="btc-bull"></span></span> &nbsp;
-  <span style="color:#888">Silver $72.53 ▼ 0.19%</span>
+  <span style="color:#888">Silver $11 ▼ 0.00%</span>
 </div>
 <div id="news-bar">
   <div class="news-title">Today's headlines</div>
-  <div class="news-item">• Australia's most-decorated living soldier charged over alleged war crimes</div><div class="news-item">• JD Vance arrives in Hungary to back Orbán's re-election bid</div><div class="news-item">• Music giant Universal gets $64bn takeover offer</div><div class="news-item">• One dead as high-speed train collides with lorry in France</div><div class="news-item">• Taiwan opposition leader visits China for expected meeting with Xi Jinping</div></div><div _del="1"></div>
+  <div class="news-item">• Historical data for 2009-01-03</div></div><div _del="1"></div>
   <div class="entity-bar">
     </div>
 </div>
@@ -49,6 +49,7 @@ button:hover{background:#222;color:#eee}
   <button id="btn-generate">GENERATE TODAY</button>
   
   <input type="text" id="load-date" placeholder="2026-04-07" style="font-family:monospace;font-size:9px;padding:4px 6px;background:#000;color:#fff;border:0.5px solid rgba(255,255,255,0.4);width:80px"/><button onclick="loadDate()">LOAD DATE</button>
+  <button onclick="scarica()">DOWNLOAD</button>
   <button id="btn-refresh" onclick="nextShape()">NEXT SHAPE</button>
   <button onclick="nextColor()">NEXT COLOR</button>
   
@@ -71,27 +72,27 @@ button:hover{background:#222;color:#eee}
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-const SIG={war:12,crisis:1,economy:1,politics:7,human:7,tech:2};
+const SIG={war:0,crisis:1,economy:2,politics:11,human:9,tech:1};
 const MARKETS={"markets":[{"name":"S&P 500","price":6583,"change":0.11},{"name":"Nikkei","price":53123,"change":1.26},{"name":"FTSE","price":10436,"change":0.69}],"avgChange":0.69,"isUp":true};
-const METALS=[{"name":"Gold","price":4694.5,"change":0.81},{"name":"Silver","price":72.53,"change":-0.19}];
-const ENTITIES=[{"name":"Trump","type":"face","label":"Trump"},{"name":"Xi","type":"face","label":"Xi Jinping"},{"name":"Gaza","type":"place","label":"Gaza"},{"name":"Cina","type":"place","label":"China"},{"name":"Iran","type":"place","label":"Iran"},{"name":"Medio Oriente","type":"place","label":"Middle East"},{"name":"gold","type":"gold","label":"Gold"},{"name":"silver","type":"silver","label":"Silver"},{"name":"pharma","type":"pharma","label":"Medical Breakthrough"}];
+const METALS=[{"name":"Gold","price":880,"change":0},{"name":"Silver","price":11,"change":0}];
+const ENTITIES=[];
 const IS_UP=true;
 const ETH_I=0.334;
-const N_ETH=10;
-const N_BTC=34;
-const ETH_BULL=false;
-const BTC_BULL=false;
-const ETH_PRICE_VAL=2099;
-const BTC_PRICE_VAL=68539;
-const DAILY_DATE='2026-04-07';
-const N_GOLD=20;
-const N_SILVER=18;
+const N_ETH=0;
+const N_BTC=0;
+const ETH_BULL=true;
+const BTC_BULL=true;
+const ETH_PRICE_VAL=0;
+const BTC_PRICE_VAL=0.001;
+const DAILY_DATE='2009-01-03';
+const N_GOLD=4;
+const N_SILVER=3;
 const HAS_PHARMA=true;
-const HAS_SHIP=true;
-const HAS_DRONE=true;
-const HAS_TANK=true;
-const HAS_BOMB=true;
-const HAS_PLANE=true;
+const HAS_SHIP=false;
+const HAS_DRONE=false;
+const HAS_TANK=false;
+const HAS_BOMB=false;
+const HAS_PLANE=false;
 const HAS_SAT=true;
 const HAS_BUTTERFLY=(SIG.war===0&&SIG.crisis===0);
 const HAS_ROCKET=false;
@@ -169,7 +170,7 @@ function choosePalette(){
   return 0;
 }
 
-let palIdx=0;
+let palIdx=3;
 const renderers=[];
 let currentAnimCancel=null;
 

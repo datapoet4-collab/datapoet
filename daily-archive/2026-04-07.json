@@ -6,11 +6,6 @@
       "label": "Trump"
     },
     {
-      "name": "Xi",
-      "type": "face",
-      "label": "Xi Jinping"
-    },
-    {
       "name": "Gaza",
       "type": "place",
       "label": "Gaza"
@@ -31,6 +26,11 @@
       "label": "Middle East"
     },
     {
+      "name": "mitra",
+      "type": "gun",
+      "label": "Weapons"
+    },
+    {
       "name": "gold",
       "type": "gold",
       "label": "Gold"
@@ -47,85 +47,85 @@
     }
   ],
   "headlines": [
-    "Australia's most-decorated living soldier charged over alleged war crimes",
-    "JD Vance arrives in Hungary to back Orbán's re-election bid",
-    "Music giant Universal gets $64bn takeover offer",
-    "One dead as high-speed train collides with lorry in France",
-    "Taiwan opposition leader visits China for expected meeting with Xi Jinping",
-    "Former Migos rapper Offset shot in Florida - reports",
-    "Nine policemen sentenced to death in India over Covid custody killings",
-    "Lil Nas X assault case to be dismissed if he completes mental health programme"
+    "Tracking recent US-Israeli strikes on Iranian infrastructure",
+    "Wireless Festival cancelled after Kanye West blocked from coming to UK",
+    "Has Artemis II shown we can land on the Moon again?",
+    "US journalist Shelly Kittleson to be released after kidnap in Iraq, militia says",
+    "French couple leave Iran after more than three years in jail",
+    "JD Vance backs Orbán's re-election bid in Budapest visit and hits out at EU",
+    "One gunman killed and two injured in shooting at Israeli consulate in Istanbul",
+    "WHO suspends Gaza medical evacuations after contractor killed by Israeli troops"
   ],
   "state": {
-    "speed": 0.036875000000000005,
+    "speed": 0.039411764705882354,
     "chaos": 1,
-    "density": 0.30267857142857146,
-    "colorMode": 0.25625,
-    "pointSize": 0.015202380952380952,
-    "opacity": 0.5720238095238095
+    "density": 0.305531167690957,
+    "colorMode": 0.19411764705882356,
+    "pointSize": 0.016397717295873575,
+    "opacity": 0.5856014047410009
   },
   "clima": "High global tension. The world burns.",
   "opere": [
     {
+      "nome": "Line of Fire",
+      "desc": "Work one. High global tension. The world burns. Signals: conflict 13, crisis 3, economy 1."
+    },
+    {
       "nome": "Fracture",
-      "desc": "Work one. High global tension. The world burns. Signals: conflict 12, crisis 1, economy 1."
+      "desc": "Work two. Matter reacts. Politics 8, humanity 5."
     },
     {
       "nome": "Detonation",
-      "desc": "Work two. Matter reacts. Politics 7, humanity 7."
-    },
-    {
-      "nome": "Collapse",
-      "desc": "Work three. Variation. Tech 2, total tension 43%."
+      "desc": "Work three. Variation. Tech 2, total tension 50%."
     }
   ],
   "signals": {
-    "war": 12,
-    "crisis": 1,
+    "war": 13,
+    "crisis": 3,
     "economy": 1,
-    "politics": 7,
-    "human": 7,
+    "politics": 8,
+    "human": 5,
     "tech": 2
   },
   "markets": {
     "markets": [
       {
         "name": "S&P 500",
-        "price": 6612,
-        "change": 0.44
+        "price": 6617,
+        "change": 0.08
       },
       {
         "name": "Nikkei",
-        "price": 53430,
-        "change": 0.03
+        "price": 0,
+        "change": -100
       },
       {
         "name": "FTSE",
-        "price": 10452,
-        "change": 0.15
+        "price": 0,
+        "change": -100
       }
     ],
-    "avgChange": 0.21,
+    "avgChange": 0.08,
     "isUp": true
   },
   "metals": [
     {
       "name": "Gold",
-      "price": 4694.5,
-      "change": 0.81
+      "price": 4800,
+      "change": 3.08
     },
     {
       "name": "Silver",
-      "price": 72.53,
-      "change": -0.19
+      "price": 75.13,
+      "change": 3.4
     }
   ],
   "eth": {
-    "price": 2099,
-    "change24h": -2.57
+    "price": 2208,
+    "change24h": 4.59
   },
   "btc": {
-    "price": 68539,
-    "change24h": -1.91
+    "price": 71241,
+    "change24h": 3.4
   }
 }

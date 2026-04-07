@@ -1,131 +1,43 @@
 {
-  "entities": [
-    {
-      "name": "Trump",
-      "type": "face",
-      "label": "Trump"
-    },
-    {
-      "name": "Xi",
-      "type": "face",
-      "label": "Xi Jinping"
-    },
-    {
-      "name": "Gaza",
-      "type": "place",
-      "label": "Gaza"
-    },
-    {
-      "name": "Cina",
-      "type": "place",
-      "label": "China"
-    },
-    {
-      "name": "Iran",
-      "type": "place",
-      "label": "Iran"
-    },
-    {
-      "name": "Medio Oriente",
-      "type": "place",
-      "label": "Middle East"
-    },
-    {
-      "name": "gold",
-      "type": "gold",
-      "label": "Gold"
-    },
-    {
-      "name": "silver",
-      "type": "silver",
-      "label": "Silver"
-    },
-    {
-      "name": "pharma",
-      "type": "pharma",
-      "label": "Medical Breakthrough"
-    }
-  ],
-  "headlines": [
-    "Australia's most-decorated living soldier charged over alleged war crimes",
-    "JD Vance arrives in Hungary to back Orbán's re-election bid",
-    "Music giant Universal gets $64bn takeover offer",
-    "One dead as high-speed train collides with lorry in France",
-    "Taiwan opposition leader visits China for expected meeting with Xi Jinping",
-    "Former Migos rapper Offset shot in Florida - reports",
-    "Nine policemen sentenced to death in India over Covid custody killings",
-    "Lil Nas X assault case to be dismissed if he completes mental health programme"
-  ],
-  "state": {
-    "speed": 0.036875000000000005,
-    "chaos": 1,
-    "density": 0.30267857142857146,
-    "colorMode": 0.25625,
-    "pointSize": 0.015202380952380952,
-    "opacity": 0.5720238095238095
-  },
-  "clima": "High global tension. The world burns.",
-  "opere": [
-    {
-      "nome": "Fracture",
-      "desc": "Work one. High global tension. The world burns. Signals: conflict 12, crisis 1, economy 1."
-    },
-    {
-      "nome": "Detonation",
-      "desc": "Work two. Matter reacts. Politics 7, humanity 7."
-    },
-    {
-      "nome": "Collapse",
-      "desc": "Work three. Variation. Tech 2, total tension 43%."
-    }
-  ],
+  "date": "2009-01-03",
+  "simulated": true,
   "signals": {
-    "war": 12,
+    "war": 0,
     "crisis": 1,
-    "economy": 1,
-    "politics": 7,
-    "human": 7,
-    "tech": 2
+    "economy": 2,
+    "politics": 11,
+    "human": 9,
+    "tech": 1
   },
-  "markets": {
-    "markets": [
-      {
-        "name": "S&P 500",
-        "price": 6612,
-        "change": 0.44
-      },
-      {
-        "name": "Nikkei",
-        "price": 53430,
-        "change": 0.03
-      },
-      {
-        "name": "FTSE",
-        "price": 10452,
-        "change": 0.15
-      }
-    ],
-    "avgChange": 0.21,
-    "isUp": true
-  },
+  "clima": "Political tension rises.",
   "metals": [
     {
       "name": "Gold",
-      "price": 4694.5,
-      "change": 0.81
+      "price": 880,
+      "change": 0
     },
     {
       "name": "Silver",
-      "price": 72.53,
-      "change": -0.19
+      "price": 11,
+      "change": 0
     }
   ],
   "eth": {
-    "price": 2099,
-    "change24h": -2.57
+    "price": 0,
+    "change24h": 0
   },
   "btc": {
-    "price": 68539,
-    "change24h": -1.91
-  }
+    "price": 0.001,
+    "change24h": 0
+  },
+  "headlines": [
+    "Historical data for 2009-01-03"
+  ],
+  "entities": [],
+  "opere": [
+    {
+      "nome": "Simulated",
+      "desc": "Simulated work for 2009-01-03"
+    }
+  ]
 }

@@ -84,7 +84,7 @@ http.createServer(async (req, res) => {
       try{
         const mm=String(selDate.getMonth()+1).padStart(2,'0');
         const dd=String(selDate.getDate()).padStart(2,'0');
-        const wr=await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`).then(r=>r.json());
+        const wr=await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`,{headers:{'User-Agent':'DataPoet/1.0 (https://datapoet.onrender.com; datapoet4@gmail.com)','Accept':'application/json'}}).then(r=>r.json());
         if(wr.events?.length>0){
           const ty=selDate.getFullYear();
           const sorted=wr.events.sort((a,b)=>Math.abs((a.year||0)-ty)-Math.abs((b.year||0)-ty));
