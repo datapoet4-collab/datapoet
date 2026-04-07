@@ -16,12 +16,7 @@ const mime = {
   '.webm': 'video/webm',
 };
 
-// All'avvio rigenerare sempre dati di oggi
-try{
-  execSync('node run-brain.mjs && node build-index.mjs', {cwd:process.cwd()});
-  console.log('✅ Dati di oggi aggiornati');
-}catch(e){console.log('Brain error:',e.message);}
-// startup_brain
+console.log('✅ Atelier AI starting...');
 
 http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
