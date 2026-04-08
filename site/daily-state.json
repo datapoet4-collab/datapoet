@@ -96,31 +96,31 @@
       },
       {
         "name": "FTSE",
-        "price": 10576,
-        "change": 2.19
+        "price": 10582,
+        "change": 2.25
       }
     ],
-    "avgChange": 2.55,
+    "avgChange": 2.57,
     "isUp": true
   },
   "metals": [
     {
       "name": "Gold",
-      "price": 4823,
-      "change": 3.56
+      "price": 4824.6,
+      "change": 3.6
     },
     {
       "name": "Silver",
       "price": 77.11,
-      "change": 7.35
+      "change": 7.36
     }
   ],
   "eth": {
-    "price": 2260,
-    "change24h": 6.2
+    "price": 2259,
+    "change24h": 6.19
   },
   "btc": {
-    "price": 71857,
-    "change24h": 3.96
+    "price": 71837,
+    "change24h": 3.94
   }
 }
