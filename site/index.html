@@ -33,15 +33,15 @@ button:hover{background:#222;color:#eee}
   <span class="market-item" style="color:#0044cc">S&P 500 ▲ 0.11%</span><span class="market-item" style="color:#0044cc">FTSE ▲ 0.69%</span>
 </div>
 <div id="metals-bar">
-  <span style="color:#cc9900">Gold $4848.2 ▲ 4.11%</span>
+  <span style="color:#cc9900">Gold $4823 ▲ 3.56%</span>
   &nbsp;|&nbsp;
   <span style="color:#3388ff">ETH $<span id="eth-price">--</span> <span id="eth-bull"></span></span> &nbsp;
   <span style="color:#ff8800">BTC $<span id="btc-price">--</span> <span id="btc-bull"></span></span> &nbsp;
-  <span style="color:#888">Silver $76.89 ▲ 5.83%</span>
+  <span style="color:#888">Silver $77.11 ▲ 7.35%</span>
 </div>
 <div id="news-bar">
   <div class="news-title">Today's headlines</div>
-  <div class="news-item">• Tracking recent US-Israeli strikes on Iranian infrastructure</div><div class="news-item">• Wireless Festival cancelled after Kanye West blocked from coming to UK</div><div class="news-item">• Has Artemis II shown we can land on the Moon again?</div><div class="news-item">• US journalist Shelly Kittleson to be released after kidnap in Iraq, militia says</div><div class="news-item">• French couple leave Iran after more than three years in jail</div></div><div _del="1"></div>
+  <div class="news-item">• Iran ceasefire deal gives Trump a way out of war - but at a high cost</div><div class="news-item">• What we know about the two-week ceasefire between the US and Iran</div><div class="news-item">• Trump-backed Republican Clay Fuller wins election to replace Marjorie Taylor Greene</div><div class="news-item">• Oil prices plunge and shares jump on US-Iran ceasefire plan</div><div class="news-item">• Wireless Festival cancelled after Kanye West blocked from coming to UK</div></div><div _del="1"></div>
   <div class="entity-bar">
     </div>
 </div>
@@ -49,7 +49,7 @@ button:hover{background:#222;color:#eee}
   <button id="btn-generate">GENERATE TODAY</button>
   
   <input type="text" id="load-date" placeholder="2026-04-07" style="font-family:monospace;font-size:9px;padding:4px 6px;background:#000;color:#fff;border:0.5px solid rgba(255,255,255,0.4);width:80px"/><button onclick="loadDate()">LOAD DATE</button>
-  <button onclick="scarica()">DOWNLOAD</button>
+  
   <button id="btn-refresh" onclick="nextShape()">NEXT SHAPE</button>
   <button onclick="nextColor()">NEXT COLOR</button>
   
@@ -72,19 +72,19 @@ button:hover{background:#222;color:#eee}
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-const SIG={war:13,crisis:3,economy:1,politics:8,human:5,tech:2};
+const SIG={war:14,crisis:3,economy:3,politics:9,human:5,tech:2};
 const MARKETS={"markets":[{"name":"S&P 500","price":6583,"change":0.11},{"name":"Nikkei","price":53123,"change":1.26},{"name":"FTSE","price":10436,"change":0.69}],"avgChange":0.69,"isUp":true};
-const METALS=[{"name":"Gold","price":4848.2,"change":4.11},{"name":"Silver","price":76.89,"change":5.83}];
-const ENTITIES=[{"name":"Trump","type":"face","label":"Trump"},{"name":"Gaza","type":"place","label":"Gaza"},{"name":"Cina","type":"place","label":"China"},{"name":"Iran","type":"place","label":"Iran"},{"name":"Medio Oriente","type":"place","label":"Middle East"},{"name":"mitra","type":"gun","label":"Weapons"},{"name":"gold","type":"gold","label":"Gold"},{"name":"silver","type":"silver","label":"Silver"},{"name":"pharma","type":"pharma","label":"Medical Breakthrough"}];
+const METALS=[{"name":"Gold","price":4823,"change":3.56},{"name":"Silver","price":77.11,"change":7.35}];
+const ENTITIES=[{"name":"Trump","type":"face","label":"Trump"},{"name":"Gaza","type":"place","label":"Gaza"},{"name":"Iran","type":"place","label":"Iran"},{"name":"Medio Oriente","type":"place","label":"Middle East"},{"name":"mitra","type":"gun","label":"Weapons"},{"name":"Petrolio","type":"oil","label":"Oil"},{"name":"gold","type":"gold","label":"Gold"},{"name":"silver","type":"silver","label":"Silver"}];
 const IS_UP=true;
 const ETH_I=0.334;
 const N_ETH=11;
 const N_BTC=36;
 const ETH_BULL=true;
 const BTC_BULL=true;
-const ETH_PRICE_VAL=2263;
-const BTC_PRICE_VAL=72519;
-const DAILY_DATE='2026-04-07';
+const ETH_PRICE_VAL=2260;
+const BTC_PRICE_VAL=71857;
+const DAILY_DATE='2026-04-08';
 const N_GOLD=20;
 const N_SILVER=19;
 const HAS_PHARMA=true;
