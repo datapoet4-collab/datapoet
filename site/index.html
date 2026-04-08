@@ -210,7 +210,7 @@ function buildScene(containerId,seed,pal,shapeOverride){
   while(container.firstChild)container.removeChild(container.firstChild);
   if(currentAnimCancel){currentAnimCancel();currentAnimCancel=null;}
 
-  const W=container.clientWidth;
+  const W=container.clientWidth||800;
   const H=Math.round(W*.6667);
   container.style.height=H+'px';
 
