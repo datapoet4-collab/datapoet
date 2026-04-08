@@ -153,7 +153,7 @@ const SHAPES=[
 // Forma del giorno — deterministica dalla data
 const _today=new Date();
 const _dayHash=(_today.getFullYear()*366+(_today.getMonth()*31)+_today.getDate());
-const DAILY_SHAPE=SHAPES[_dayHash % SHAPES.length];
+const DAILY_SHAPE=SHAPES[_dayHash % SHAPES.length]||SHAPES[0];
 function choosePalette(){
   // Peso proporzionale — vince il segnale dominante con randomizzazione
   const weights=[
