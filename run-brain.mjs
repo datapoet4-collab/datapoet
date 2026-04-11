@@ -9,6 +9,7 @@ data.markets = markets;
 data.metals = metals;
 data.eth = eth;
 data.btc = btc;
+data.date = new Date().toISOString().split("T")[0];
 writeFileSync('./site/daily-state.json', JSON.stringify(data, null, 2));
 // Salva archivio giornaliero
 const today=new Date().toISOString().split('T')[0];

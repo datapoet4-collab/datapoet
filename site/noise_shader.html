@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh}canvas{display:block}#hud{position:fixed;bottom:16px;left:16px;font-family:'Courier New',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,30,0,0.7);pointer-events:none}#sig{position:fixed;right:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:5px}button{font-family:'Courier New',monospace;font-size:7px;padding:4px 8px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.6);color:rgba(255,255,255,0.4);cursor:pointer;letter-spacing:1px}.active{color:#fff;border-color:#fff}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">DATA POET · NOISE #001 · 04/07/2026</div>
+<div id="sig"></div>
+<script>
+const W=450,H=800;
+const c=document.getElementById('c');
+c.width=W;c.height=H;
+const gl=c.getContext('webgl');
+
+const VS=`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+
+const FS=`
+precision highp float;
+uniform vec2 res;
+uniform float time;
+uniform float sigType;
+uniform vec3 col1;
+uniform vec3 col2;
+uniform float morphT;
+uniform float intensity;
+
+#define PI 3.14159265
+
+float hash(float n){return fract(sin(n)*43758.5453);}
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+
+float noise(vec3 p){
+  vec3 i=floor(p);vec3 f=fract(p);
+  f=f*f*(3.-2.*f);
+  float n=i.x+i.y*57.+i.z*113.;
+  return mix(mix(mix(hash(n),hash(n+1.),f.x),mix(hash(n+57.),hash(n+58.),f.x),f.y),
+             mix(mix(hash(n+113.),hash(n+114.),f.x),mix(hash(n+170.),hash(n+171.),f.x),f.y),f.z);
+}
+
+float fbm(vec3 p){
+  float v=0.,a=.5;
+  for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.1+vec3(1.7,9.2,3.4);a*=.5;}
+  return v;
+}
+
+// SDF testa umana — costruita con primitive smooth blended
+float smin(float a,float b,float k){
+  float h=clamp(.5+.5*(b-a)/k,0.,1.);
+  return mix(b,a,h)-k*h*(1.-h);
+}
+
+float sdSphere(vec3 p,float r){return length(p)-r;}
+float sdEllipsoid(vec3 p,vec3 r){return (length(p/r)-1.)*min(min(r.x,r.y),r.z);}
+float sdCapsule(vec3 p,vec3 a,vec3 b,float r){
+  vec3 pa=p-a,ba=b-a;
+  float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);
+  return length(pa-ba*h)-r;
+}
+float sdBox(vec3 p,vec3 b){vec3 d=abs(p)-b;return length(max(d,0.))+min(max(d.x,max(d.y,d.z)),0.);}
+
+float head(vec3 p,float t,float sig,float ity){
+  // deformazione base dal segnale
+  vec3 wp=p;
+  if(sig<0.5){
+    // WAR — frattura, spigoli
+    wp+=vec3(sin(p.y*8.+t*2.5),cos(p.x*8.+t*2.8),sin(p.z*6.+t*2.))*0.06*ity;
+    wp+=vec3(abs(sin(p.x*14.+t*3.5)))*0.04*ity;
+  } else if(sig<1.5){
+    // POLITICS — asimmetria
+    float side=sign(p.x);
+    wp.x+=sin(p.y*6.+t*2.)*0.08*ity*side;
+    wp.y+=cos(p.x*5.+t*1.8)*0.04*ity;
+  } else if(sig<2.5){
+    // TECH — glitch digitale
+    wp.x+=floor(sin(p.y*12.+t*4.)*4.)/4.*0.04*ity;
+    wp.y+=floor(sin(p.x*10.+t*3.)*3.)/3.*0.035*ity;
+  } else if(sig<3.5){
+    // CULTURE — pulsante
+    float pulse=sin(t*3.)*0.5+0.5;
+    wp+=normalize(p)*sin(length(p)*8.-t*4.)*0.04*ity*pulse;
+  } else {
+    // HUMAN — organico, respira
+    wp+=vec3(sin(p.y*3.+t)*0.03,cos(p.x*3.+t*0.8)*0.025,0.)*ity;
+    // drip verso basso
+    wp.y-=max(0.,sin(t*0.8+p.x*4.))*0.05*ity;
+  }
+
+  // CRANIO — ellissoide base
+  float skull=sdEllipsoid(wp,vec3(1.0,1.2,0.95));
+
+  // aggiunge noise per texture pelle
+  float n=fbm(wp*2.5+vec3(t*0.1))*0.08*ity;
+  skull+=n;
+
+  // FRONTE — protrusa
+  float fore=sdEllipsoid(wp-vec3(0.,0.35,0.55),vec3(0.75,0.55,0.55));
+
+  // ZIGOMI
+  float chkL=sdEllipsoid(wp-vec3(-0.7,-0.1,0.5),vec3(0.38,0.28,0.32));
+  float chkR=sdEllipsoid(wp-vec3( 0.7,-0.1,0.5),vec3(0.38,0.28,0.32));
+
+  // NASO
+  float nose=sdCapsule(wp,vec3(0.,0.1,0.85),vec3(0.,-0.15,1.05),0.12);
+  float noseTip=sdEllipsoid(wp-vec3(0.,-0.18,1.0),vec3(0.14,0.1,0.14));
+  float noseD=smin(nose,noseTip,0.05);
+
+  // BOCCA
+  float mouthOpen=0.0;
+  if(sig<0.5) mouthOpen=0.06*ity; // war — bocca aperta
+  float lipU=sdCapsule(wp,vec3(-0.28,-0.42,0.88),vec3(0.28,-0.42,0.88),0.055+mouthOpen*0.3);
+  float lipD=sdCapsule(wp,vec3(-0.25,-0.52-mouthOpen,0.88),vec3(0.25,-0.52-mouthOpen,0.88),0.05);
+  float mouth=smin(lipU,lipD,0.04);
+
+  // MENTO
+  float chin=sdEllipsoid(wp-vec3(0.,-0.62,0.72),vec3(0.32,0.22,0.32));
+
+  // ORECCHIE
+  float earL=sdEllipsoid(wp-vec3(-1.02,0.,0.05),vec3(0.1,0.32,0.18));
+  float earR=sdEllipsoid(wp-vec3( 1.02,0.,0.05),vec3(0.1,0.32,0.18));
+
+  // COLLO
+  float neck=sdCapsule(wp,vec3(0.,-0.9,0.1),vec3(0.,-1.5,0.05),0.28);
+
+  // SPALLE
+  float shlL=sdEllipsoid(wp-vec3(-1.2,-1.4,0.),vec3(0.55,0.35,0.4));
+  float shlR=sdEllipsoid(wp-vec3( 1.2,-1.4,0.),vec3(0.55,0.35,0.4));
+
+  // unione fluida
+  float d=skull;
+  d=smin(d,fore,0.15);
+  d=smin(d,chkL,0.12);
+  d=smin(d,chkR,0.12);
+  d=smin(d,noseD,0.08);
+  d=smin(d,mouth,0.06);
+  d=smin(d,chin,0.12);
+  d=smin(d,earL,0.06);
+  d=smin(d,earR,0.06);
+  d=smin(d,neck,0.12);
+  d=smin(d,shlL,0.18);
+  d=smin(d,shlR,0.18);
+
+  return d;
+}
+
+vec3 calcNormal(vec3 p,float t,float sig,float ity){
+  vec2 e=vec2(0.001,0.);
+  return normalize(vec3(
+    head(p+e.xyy,t,sig,ity)-head(p-e.xyy,t,sig,ity),
+    head(p+e.yxy,t,sig,ity)-head(p-e.yxy,t,sig,ity),
+    head(p+e.yyx,t,sig,ity)-head(p-e.yyx,t,sig,ity)
+  ));
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy/res-.5)*vec2(1.,res.y/res.x)*2.2;
+
+  // camera
+  vec3 ro=vec3(sin(time*0.12)*0.4,0.1+sin(time*0.08)*0.15,3.2);
+  vec3 rd=normalize(vec3(uv,-1.8));
+
+  // morph colore
+  vec3 col=mix(col1,col2,morphT);
+
+  // SFONDO — gradiente colorato
+  vec3 bg=mix(col*0.08,col*0.02,uv.y*0.5+0.5);
+  bg+=fbm(vec3(uv*1.5,time*0.05))*col*0.15;
+
+  // linee taglio manga
+  float line1=abs(sin(uv.y*8.+0.3))<0.015?1.:0.;
+  float line2=abs(sin(uv.y*5.-0.2))<0.012?1.:0.;
+  bg+=col*(line1*0.3+line2*0.2);
+
+  // RAYMARCHING
+  float d,t2=0.;
+  vec3 hit=ro;
+  bool found=false;
+  for(int i=0;i<80;i++){
+    hit=ro+rd*t2;
+    d=head(hit,time,sigType,intensity);
+    if(d<0.002){found=true;break;}
+    if(t2>8.)break;
+    t2+=d*0.85;
+  }
+
+  vec3 finalCol=bg;
+
+  if(found){
+    vec3 n=calcNormal(hit,time,sigType,intensity);
+
+    // luci cinematiche
+    vec3 lightPos=vec3(2.5+sin(time*0.5)*1.,3.,3.);
+    vec3 lightPos2=vec3(-2.,1.,-2.);
+    vec3 ld=normalize(lightPos-hit);
+    vec3 ld2=normalize(lightPos2-hit);
+
+    float diff=max(0.,dot(n,ld));
+    float diff2=max(0.,dot(n,ld2))*0.4;
+    float spec=pow(max(0.,dot(reflect(-ld,n),normalize(ro-hit))),32.);
+
+    // subsurface scattering simulato
+    float sss=max(0.,dot(n,-ld))*0.25;
+
+    // ambient occlusion semplice
+    float ao=1.-fbm(hit*3.)*0.3;
+
+    // materiale finale
+    vec3 matCol=col*(diff*0.9+diff2+sss+0.15)*ao;
+    matCol+=vec3(1.)*spec*0.4;
+
+    // effetti per categoria
+    if(sigType<0.5){
+      // WAR — vene rosse sulla superficie
+      float veins=fbm(hit*6.+time*0.2)*0.4;
+      matCol=mix(matCol,col*2.,veins*0.3);
+    } else if(sigType>1.5&&sigType<2.5){
+      // TECH — glitch pattern
+      float glitch=step(0.98,hash(floor(hit.y*20.+time*3.)));
+      matCol=mix(matCol,col*2.,glitch*0.8);
+    }
+
+    // drip effetto cera
+    if(sigType<0.5||sigType>3.5){
+      float drip=max(0.,sin(hit.x*8.+time*0.5))*max(0.,-hit.y-0.5)*0.4;
+      matCol=mix(matCol,col*1.5,drip*intensity);
+    }
+
+    // fog
+    float fog=1.-exp(-t2*0.05);
+    finalCol=mix(matCol,bg,fog);
+
+    // outline — bordo scuro
+    float rim=1.-max(0.,dot(n,normalize(ro-hit)));
+    rim=pow(rim,3.)*0.5;
+    finalCol=mix(finalCol,vec3(0.),rim);
+  }
+
+  // grain cinematico
+  finalCol+=vec3((hash(gl_FragCoord.xy+time)-0.5)*0.03);
+
+  // vignette
+  float vig=1.-smoothstep(0.5,1.2,length(uv));
+  finalCol*=vig;
+
+  // tone mapping
+  finalCol=finalCol/(finalCol+0.8);
+  finalCol=pow(finalCol,vec3(0.45));
+
+  gl_FragColor=vec4(finalCol,1.);
+}
+`;
+
+function compile(type,src){
+  const s=gl.createShader(type);
+  gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog=gl.createProgram();
+gl.attachShader(prog,compile(gl.VERTEX_SHADER,VS));
+gl.attachShader(prog,compile(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);gl.useProgram(prog);
+
+const buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const pl=gl.getAttribLocation(prog,'p');
+gl.enableVertexAttribArray(pl);
+gl.vertexAttribPointer(pl,2,gl.FLOAT,false,0,0);
+
+const uRes=gl.getUniformLocation(prog,'res');
+const uTime=gl.getUniformLocation(prog,'time');
+const uSig=gl.getUniformLocation(prog,'sigType');
+const uCol1=gl.getUniformLocation(prog,'col1');
+const uCol2=gl.getUniformLocation(prog,'col2');
+const uMorphT=gl.getUniformLocation(prog,'morphT');
+const uInt=gl.getUniformLocation(prog,'intensity');
+
+gl.uniform2f(uRes,W,H);
+
+const SIGNALS=[
+  {t:'2026 Iran war',   c:'war',     type:0, col:[1.0,0.04,0.01], v:0.95},
+  {t:'Trump Threats',   c:'war',     type:0, col:[0.9,0.03,0.01], v:0.88},
+  {t:'Donald Trump',    c:'politics',type:1, col:[0.85,0.65,0.0],  v:0.85},
+  {t:'Tucker Carlson',  c:'politics',type:1, col:[0.5,0.03,0.9],   v:0.65},
+  {t:'Artemis II',      c:'tech',    type:2, col:[0.0,0.7,1.0],    v:0.70},
+  {t:'MegaTrain LLMs',  c:'tech',    type:2, col:[0.0,0.6,0.95],   v:0.68},
+  {t:'WrestleMania 42', c:'culture', type:3, col:[1.0,0.6,0.0],    v:0.60},
+  {t:'Kanye West',      c:'culture', type:3, col:[0.95,0.5,0.0],   v:0.65},
+  {t:'Deaths in 2026',  c:'human',   type:4, col:[0.0,0.8,0.35],   v:0.75},
+  {t:'Christina Koch',  c:'human',   type:4, col:[0.0,0.7,0.3],    v:0.68},
+];
+
+// sidebar
+const sigDiv=document.getElementById('sig');
+SIGNALS.forEach((s,i)=>{
+  const b=document.createElement('button');
+  b.textContent=s.t.substring(0,12);
+  b.id='s'+i;
+  b.onclick=()=>{sigIdx=i;sigTimer=0;};
+  sigDiv.appendChild(b);
+});
+
+let sigIdx=0,sigTimer=0,t=0;
+const SIG_DUR=4.0;
+
+function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;sigTimer+=0.016;
+  if(sigTimer>=SIG_DUR){sigTimer=0;sigIdx=(sigIdx+1)%SIGNALS.length;}
+  const mt=sigTimer/SIG_DUR;
+  const sig=SIGNALS[sigIdx];
+  const next=SIGNALS[(sigIdx+1)%SIGNALS.length];
+
+  document.querySelectorAll('button').forEach((b,i)=>b.className=i===sigIdx?'active':'');
+
+  gl.uniform1f(uTime,t);
+  gl.uniform1f(uSig,sig.type+mt*(next.type-sig.type));
+  gl.uniform3fv(uCol1,sig.col);
+  gl.uniform3fv(uCol2,next.col);
+  gl.uniform1f(uMorphT,mt);
+  gl.uniform1f(uInt,sig.v);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+frame();
+</script>
+</body>
+</html>

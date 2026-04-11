@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh}
+#wrap{width:600px;height:900px;flex-shrink:0}
+canvas{display:block;width:600px!important;height:900px!important}
+</style>
+</head>
+<body>
+<div id="wrap"></div>
+<script type="module">
+import * as THREE from 'three';
+
+const RW=1200,RH=1800;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(RW,RH);
+renderer.setPixelRatio(2);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=2.4;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const canvas=renderer.domElement;
+canvas.style.width='600px';canvas.style.height='900px';
+document.getElementById('wrap').prepend(canvas);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x000000);
+// camera di taglio — vista laterale leggermente ruotata
+const camera=new THREE.PerspectiveCamera(42,RW/RH,0.01,500);
+camera.position.set(6,2,14);camera.lookAt(0,0,0);
+
+scene.add(new THREE.AmbientLight(0xffffff,.4));
+const key=new THREE.SpotLight(0xffffff,4000,300,Math.PI/6,.005);
+key.position.set(14,20,10);key.castShadow=true;
+key.shadow.mapSize.set(4096,4096);key.shadow.bias=-.001;
+scene.add(key);scene.add(key.target);
+const fill=new THREE.DirectionalLight(0xffffff,.5);fill.position.set(-12,4,6);scene.add(fill);
+const rim=new THREE.SpotLight(0xffffff,2000,300,Math.PI/8,0);
+rim.position.set(-8,24,-16);scene.add(rim);scene.add(rim.target);
+const bot=new THREE.DirectionalLight(0xffffff,.25);bot.position.set(0,-12,4);scene.add(bot);
+// luce dal basso per dettagli
+const under=new THREE.PointLight(0xffffff,800,60);under.position.set(2,-8,6);scene.add(under);
+
+function makeTex(type){
+  const s=512;const d=new Uint8Array(s*s*4);
+  for(let i=0;i<s*s;i++){
+    const x=i%s,y=Math.floor(i/s);let v=128;
+    if(type==='concrete'){v=80+Math.random()*110;if(Math.sin(x*.06)*Math.cos(y*.09)>.82)v=Math.max(20,v-70);if(Math.random()>.96)v=Math.max(10,v-90);}
+    else if(type==='metal'){v=110+Math.sin(y*.9+x*.015)*65+Math.random()*25;if(Math.random()>.98)v=Math.min(255,v+90);}
+    else if(type==='rubber'){v=22+Math.random()*35;if(Math.random()>.88)v+=18;}
+    else if(type==='marble'){const vn=Math.sin(x*.05+Math.sin(y*.08)*3)*Math.cos(y*.04)*128+128;v=Math.round(vn*.4+90+Math.random()*30);}
+    d[i*4]=v;d[i*4+1]=v;d[i*4+2]=v;d[i*4+3]=255;
+  }
+  const t=new THREE.DataTexture(d,s,s,THREE.RGBAFormat);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(3,3);t.needsUpdate=true;return t;
+}
+const TX={c:makeTex('concrete'),m:makeTex('metal'),r:makeTex('rubber'),w:makeTex('marble')};
+const mC=(col=0x555555)=>new THREE.MeshStandardMaterial({color:col,roughness:.97,metalness:.02,map:TX.c,roughnessMap:TX.c,bumpMap:TX.c,bumpScale:.08});
+const mM=(col=0xaaaaaa)=>new THREE.MeshStandardMaterial({color:col,roughness:.06,metalness:.99,map:TX.m,roughnessMap:TX.m});
+const mR=()=>new THREE.MeshStandardMaterial({color:0x080808,roughness:.95,metalness:.05,map:TX.r,roughnessMap:TX.r,bumpMap:TX.r,bumpScale:.04});
+const mW=(col=0xdddddd)=>new THREE.MeshStandardMaterial({color:col,roughness:.88,metalness:.03,map:TX.w,roughnessMap:TX.w,bumpMap:TX.w,bumpScale:.05});
+const G=()=>new THREE.Group();
+const M=(geo,mat)=>{const o=new THREE.Mesh(geo,mat);o.castShadow=true;o.receiveShadow=true;return o;};
+
+// ── SATELLITE — dettagliatissimo ──────────────────────────────────────────
+function buildSatellite(){
+  const g=G();const S=1.8;
+
+  // corpo principale — box esagonale
+  const body=M(new THREE.BoxGeometry(.9*S,.9*S,.9*S,10,10,10),mM(0xbbbbbb));g.add(body);
+  // facce corpo — pannelli diversi
+  [[0,.46*S,0],[0,-.46*S,0],[.46*S,0,0],[-.46*S,0,0],[0,0,.46*S],[0,0,-.46*S]].forEach(([x,y,z],i)=>{
+    const face=M(new THREE.BoxGeometry(.82*S,.82*S,.04*S,6,6,1),i%2===0?mM(0x999999):mC(0x444444));
+    face.position.set(x,y,z);
+    if(x!==0) face.rotation.y=Math.PI/2;
+    if(y!==0) face.rotation.x=Math.PI/2;
+    g.add(face);
+  });
+
+  // pannelli solari — 2 ali grandi con celle dettagliate
+  [-1,1].forEach(sx=>{
+    // struttura ala
+    const wingFrame=M(new THREE.BoxGeometry(3.0*S,.04*S,1.1*S,2,2,2),mM(0x666666));
+    wingFrame.position.set(sx*2.05*S,0,0);g.add(wingFrame);
+    // pannello solare
+    const panel=M(new THREE.BoxGeometry(2.8*S,.02*S,1.0*S,2,2,2),mC(0x222222));
+    panel.position.set(sx*2.05*S,0,0);g.add(panel);
+    // celle solari 4x8
+    for(let row=0;row<4;row++) for(let col=0;col<8;col++){
+      const cell=M(new THREE.BoxGeometry(.28*S,.04*S,.2*S,2,1,2),mM(col%2===0?0x444444:0x333333));
+      cell.position.set(sx*2.05*S+(col-3.5)*.34*S,.04*S,(row-1.5)*.24*S);g.add(cell);
+    }
+    // connessione ala/corpo
+    const joint=M(new THREE.CylinderGeometry(.08*S,.08*S,.2*S,12,4),mM(0xaaaaaa));
+    joint.rotation.z=Math.PI/2;joint.position.set(sx*.55*S,0,0);g.add(joint);
+    // bordo ala
+    const edge=M(new THREE.BoxGeometry(2.9*S,.06*S,.04*S,20,1,1),mM(0x888888));
+    edge.position.set(sx*2.05*S,0,.54*S);g.add(edge);
+    const edge2=M(new THREE.BoxGeometry(2.9*S,.06*S,.04*S,20,1,1),mM(0x888888));
+    edge2.position.set(sx*2.05*S,0,-.54*S);g.add(edge2);
+  });
+
+  // antenna parabolica grande
+  const dishSupport=M(new THREE.CylinderGeometry(.03*S,.03*S,.7*S,8,6),mM(0x999999));
+  dishSupport.position.set(.2*S,.8*S,-.1*S);g.add(dishSupport);
+  const dish=M(new THREE.CylinderGeometry(.6*S,.01*S,.4*S,32,12,true),mM(0xcccccc));
+  dish.position.set(.2*S,1.22*S,-.1*S);g.add(dish);
+  const dishRim=M(new THREE.TorusGeometry(.6*S,.025*S,10,64),mM(0xaaaaaa));
+  dishRim.rotation.x=Math.PI/2;dishRim.position.set(.2*S,1.22*S,-.1*S);g.add(dishRim);
+  // piattino feed antenna
+  const feed=M(new THREE.CylinderGeometry(.06*S,.06*S,.08*S,12,4),mM(0x888888));
+  feed.position.set(.2*S,.88*S,-.1*S);g.add(feed);
+
+  // antenne omnidirezionali
+  [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx,sz])=>{
+    const ant=M(new THREE.CylinderGeometry(.012*S,.012*S,.8*S,6,6),mM(0xdddddd));
+    ant.rotation.z=sx*.25;ant.rotation.x=sz*.2;
+    ant.position.set(sx*.38*S,-.58*S,sz*.38*S);g.add(ant);
+    const antTip=M(new THREE.SphereGeometry(.025*S,8,8),mM(0xffffff));
+    antTip.position.set(sx*.47*S,-1.0*S,sz*.46*S);g.add(antTip);
+  });
+
+  // thruster — 4 ugelli
+  for(let i=0;i<4;i++){
+    const ang=i/4*Math.PI*2+Math.PI/4;
+    const thr=M(new THREE.CylinderGeometry(.07*S,.09*S,.18*S,12,4),mM(0x777777));
+    thr.position.set(Math.cos(ang)*.42*S,-.53*S,Math.sin(ang)*.42*S);g.add(thr);
+    const thrNoz=M(new THREE.CylinderGeometry(.06*S,.04*S,.08*S,12,2),mC(0x333333));
+    thrNoz.position.set(Math.cos(ang)*.42*S,-.64*S,Math.sin(ang)*.42*S);g.add(thrNoz);
+  }
+
+  // sensori ottici — 3 lenti
+  [0,.3,-.3].forEach((oz,i)=>{
+    const sensor=M(new THREE.CylinderGeometry(.08*S,.1*S,.14*S,16,4),mM(0x666666));
+    sensor.rotation.x=Math.PI/2;sensor.position.set(0,-.1*S+i*.12*S,.5*S);g.add(sensor);
+    const lens2=M(new THREE.CircleGeometry(.07*S,16),mM(0x222222));
+    lens2.position.set(0,-.1*S+i*.12*S,.58*S);g.add(lens2);
+  });
+
+  // cavo elettrico tra corpo e pannelli
+  [-1,1].forEach(sx=>{
+    const cable=M(new THREE.CylinderGeometry(.015*S,.015*S,1.1*S,6,8),mR());
+    cable.rotation.z=Math.PI/2;cable.position.set(sx*1.1*S,.06*S,.2*S);g.add(cable);
+  });
+
+  return g;
+}
+
+// ── DRONE — militare dettagliato ──────────────────────────────────────────
+function buildDrone(){
+  const g=G();const D=1.4;
+
+  // corpo aerodinamico
+  const body=M(new THREE.BoxGeometry(.75*D,.2*D,.65*D,10,4,8),mR());g.add(body);
+  const nose=M(new THREE.CylinderGeometry(.08*D,.22*D,.3*D,10,6),mR());
+  nose.rotation.x=-Math.PI/2;nose.position.set(0,0,.48*D);g.add(nose);
+  const belly=M(new THREE.SphereGeometry(.22*D,20,20),mR());
+  belly.scale.set(1.1,.5,1);belly.position.y=-.13*D;g.add(belly);
+
+  // 4 braccia
+  [[1,0],[0,1],[-1,0],[0,-1]].forEach(([ax,az])=>{
+    const arm=M(new THREE.BoxGeometry(1.1*D,.065*D,.085*D,12,2,2),mC(0x1a1a1a));
+    arm.rotation.y=Math.atan2(az,ax);arm.position.set(ax*.55*D,0,az*.55*D);g.add(arm);
+    // motore
+    const motor=M(new THREE.CylinderGeometry(.15*D,.15*D,.2*D,20,4),mM(0x777777));
+    motor.position.set(ax*1.1*D,.06*D,az*1.1*D);g.add(motor);
+    // elica doppia
+    const prop=M(new THREE.BoxGeometry(.85*D,.025*D,.1*D,12,1,2),mC(0x111111));
+    prop.position.set(ax*1.1*D,.17*D,az*1.1*D);g.add(prop);
+    const prop2=M(new THREE.BoxGeometry(.1*D,.025*D,.85*D,2,1,12),mC(0x111111));
+    prop2.position.set(ax*1.1*D,.17*D,az*1.1*D);g.add(prop2);
+    // ring motore
+    const mring=M(new THREE.TorusGeometry(.16*D,.02*D,8,24),mM(0x555555));
+    mring.position.set(ax*1.1*D,.06*D,az*1.1*D);g.add(mring);
+  });
+
+  // gimbal camera — 3 assi
+  const gimbalArm=M(new THREE.BoxGeometry(.06*D,.25*D,.06*D,2,4,2),mC(0x222222));
+  gimbalArm.position.y=-.25*D;g.add(gimbalArm);
+  const gimbalHoriz=M(new THREE.BoxGeometry(.28*D,.04*D,.04*D,4,1,1),mC(0x222222));
+  gimbalHoriz.position.y=-.38*D;g.add(gimbalHoriz);
+  const gimbalBall=M(new THREE.SphereGeometry(.1*D,16,16),mM(0x666666));
+  gimbalBall.position.y=-.45*D;g.add(gimbalBall);
+  const lens=M(new THREE.CylinderGeometry(.06*D,.08*D,.12*D,20,4),mC(0x111111));
+  lens.position.y=-.58*D;g.add(lens);
+  const lensGlass=M(new THREE.CircleGeometry(.055*D,20),mM(0x222222));
+  lensGlass.position.y=-.65*D;lensGlass.rotation.x=-Math.PI/2;g.add(lensGlass);
+  // ring lens
+  const lensRing=M(new THREE.TorusGeometry(.06*D,.01*D,8,20),mM(0x888888));
+  lensRing.position.y=-.65*D;g.add(lensRing);
+
+  // missili x2
+  [-1,1].forEach(sx=>{
+    const mis=M(new THREE.CylinderGeometry(.055*D,.055*D,.7*D,12,8),mM(0x666666));
+    mis.position.set(sx*.24*D,-.18*D,.18*D);g.add(mis);
+    const misTip=M(new THREE.ConeGeometry(.055*D,.2*D,12,6),mM(0x555555));
+    misTip.position.set(sx*.24*D,-.55*D,.18*D);g.add(misTip);
+    const misRing=M(new THREE.TorusGeometry(.056*D,.012*D,6,16),mM(0x888888));
+    misRing.position.set(sx*.24*D,-.28*D,.18*D);g.add(misRing);
+    // alette missile
+    for(let f=0;f<4;f++){
+      const fin=M(new THREE.BoxGeometry(.1*D,.15*D,.015*D,2,3,1),mM(0x555555));
+      fin.rotation.y=f/4*Math.PI*2;fin.position.set(sx*.24*D+Math.cos(f/4*Math.PI*2)*.07*D,-.42*D,.18*D+Math.sin(f/4*Math.PI*2)*.07*D);
+      g.add(fin);
+    }
+  });
+
+  // luci LED — piccoli dettagli
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([ax,az])=>{
+    const led=M(new THREE.SphereGeometry(.018*D,8,8),mM(0xffffff));
+    led.position.set(ax*.35*D,.11*D,az*.35*D);g.add(led);
+  });
+
+  // antenna GPS
+  const gps=M(new THREE.CylinderGeometry(.04*D,.04*D,.18*D,8,4),mM(0x888888));
+  gps.position.set(-.2*D,.18*D,-.1*D);g.add(gps);
+  const gpsDish=M(new THREE.SphereGeometry(.06*D,10,10),mM(0xaaaaaa));
+  gpsDish.scale.y=.4;gpsDish.position.set(-.2*D,.28*D,-.1*D);g.add(gpsDish);
+
+  return g;
+}
+
+const satellite=buildSatellite();
+const drone=buildDrone();
+
+// posizione di taglio — satellite ruotato per vederlo di lato
+satellite.rotation.x=.25;
+satellite.rotation.y=.6;
+satellite.rotation.z=.1;
+satellite.position.set(-1.5,.5,0);
+
+// drone sopra/dietro il satellite — lo sorveglia
+drone.rotation.x=.2;
+drone.rotation.y=-.4;
+drone.rotation.z=.15;
+drone.position.set(1.8,2.8,-1.0);
+
+scene.add(satellite);
+scene.add(drone);
+
+renderer.render(scene,camera);
+</script>
+</body>
+</html>

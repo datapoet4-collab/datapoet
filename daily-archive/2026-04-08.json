@@ -44,12 +44,12 @@
   "headlines": [
     "Iran ceasefire deal gives Trump a way out of war - but at a high cost",
     "What we know about the two-week ceasefire between the US and Iran",
+    "Israel strikes southern Lebanon after US-Iran ceasefire",
     "Trump-backed Republican Clay Fuller wins election to replace Marjorie Taylor Greene",
     "Oil prices plunge and shares jump on US-Iran ceasefire plan",
-    "Wireless Festival cancelled after Kanye West blocked from coming to UK",
-    "US journalist Shelly Kittleson released after kidnap in Iraq, officials say",
+    "Newlywed wife of US soldier freed by ICE after detention at military base",
     "Plan to scrap presidential elections puts Zimbabweans at loggerheads",
-    "Has Artemis II shown we can land on the Moon again?"
+    "Top Australian soldier charged with war crimes to remain in jail on remand"
   ],
   "state": {
     "speed": 0.03789473684210526,
@@ -96,31 +96,31 @@
       },
       {
         "name": "FTSE",
-        "price": 10582,
-        "change": 2.25
+        "price": 10650,
+        "change": 2.91
       }
     ],
-    "avgChange": 2.57,
+    "avgChange": 2.79,
     "isUp": true
   },
   "metals": [
     {
       "name": "Gold",
-      "price": 4824.6,
-      "change": 3.6
+      "price": 4820.2,
+      "change": 3.5
     },
     {
       "name": "Silver",
-      "price": 77.11,
-      "change": 7.36
+      "price": 77.06,
+      "change": 7.29
     }
   ],
   "eth": {
-    "price": 2259,
-    "change24h": 6.19
+    "price": 2245,
+    "change24h": 7.45
   },
   "btc": {
-    "price": 71837,
-    "change24h": 3.94
+    "price": 71515,
+    "change24h": 4.82
   }
 }

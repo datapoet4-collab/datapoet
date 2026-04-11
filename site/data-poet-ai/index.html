@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>DATA POET AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;color:#eee;font-family:Helvetica Neue,sans-serif;padding:20px}
+h1{font-weight:200;font-size:1.4rem;letter-spacing:.4em;text-align:center;margin-bottom:20px;color:#fff}
+.grid{display:grid;grid-template-columns:280px 1fr;gap:12px;max-width:1200px;margin:0 auto}
+.panel{background:#161616;border:0.5px solid #2a2a2a;padding:14px}
+.pt{font-size:.55rem;letter-spacing:.3em;text-transform:uppercase;color:#555;margin-bottom:10px;border-bottom:0.5px solid #222;padding-bottom:6px}
+label{font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:#666;display:block;margin-bottom:4px;margin-top:10px}
+input,textarea,select{width:100%;background:#0d0d0d;border:0.5px solid #2a2a2a;color:#eee;padding:7px 9px;font-family:monospace;font-size:.72rem;resize:vertical;outline:none}
+textarea{min-height:80px}
+.btn{background:transparent;border:0.5px solid #333;color:#888;padding:7px 12px;cursor:pointer;font-size:.58rem;letter-spacing:.15em;text-transform:uppercase}
+.btn:hover{background:#222;color:#fff;border-color:#666}
+.btn-w{border-color:#888;color:#fff}.btn-w:hover{background:#fff;color:#111}
+.btn-ai{background:#0a0a18;border:0.5px solid #2a2a5a;color:#5566aa;padding:6px 12px;cursor:pointer;font-size:.55rem;letter-spacing:.15em;text-transform:uppercase}
+.btn-ai:hover{background:#111128;border-color:#4455aa;color:#8899cc}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.chip{font-size:.55rem;padding:2px 8px;border:0.5px solid #2a2a2a;color:#666;cursor:pointer}
+.chip:hover,.chip.on{background:#1e1e1e;color:#fff;border-color:#555}
+.prev{background:#0a0a0a;border:0.5px solid #222;padding:10px;font-family:monospace;font-size:.68rem;color:#888;min-height:60px;line-height:1.6;word-break:break-word;margin-top:5px}
+.row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.st{font-size:.6rem;color:#555;margin-top:6px;font-family:monospace}
+.st.ok{color:#5a5}.st.err{color:#a55}.st.lo{color:#aa8}
+.tabs{display:flex;border-bottom:0.5px solid #222;margin-bottom:12px;flex-wrap:wrap}
+.tab{padding:8px 14px;font-size:.55rem;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;color:#444;border-bottom:2px solid transparent;margin-bottom:-0.5px}
+.tab.on{color:#fff;border-bottom-color:#fff}
+.tc{display:none}.tc.on{display:block}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px}
+.gi{aspect-ratio:1;background:#0d0d0d;border:0.5px solid #1e1e1e;position:relative;overflow:hidden}
+.gi img{width:100%;height:100%;object-fit:cover;display:block}
+.gi .ov{position:absolute;inset:0;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;opacity:0;transition:opacity .2s;padding:6px}
+.gi:hover .ov{opacity:1}
+.gempty{color:#2a2a2a;font-size:.58rem;text-align:center;padding:30px;grid-column:1/-1}
+.prog{height:2px;background:#1a1a1a;margin-top:8px}
+.progb{height:100%;background:#fff;width:0%;transition:width .3s}
+input[type=range]{accent-color:#888}
+.val{font-size:.6rem;color:#555;font-family:monospace;float:right}
+
+/* Formato grid */
+.fmt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:6px}
+.fmt-btn{background:#0d0d0d;border:0.5px solid #222;color:#555;font-size:.5rem;padding:5px 3px;text-align:center;cursor:pointer;line-height:1.5;transition:all .15s}
+.fmt-btn:hover{border-color:#444;color:#888}
+.fmt-btn.on{border-color:#888;color:#fff;background:#1a1a1a}
+.fmt-icon{font-size:.9rem;display:block;margin-bottom:1px}
+.custom-row{display:flex;gap:5px;align-items:center;margin-top:6px}
+.custom-row input{width:70px;text-align:center;padding:5px}
+.custom-row span{font-size:.6rem;color:#444}
+.res-info{font-size:.55rem;color:#444;font-family:monospace;margin-top:4px}
+
+/* Upload */
+.upload-zone{border:0.5px dashed #2a2a2a;padding:20px;text-align:center;cursor:pointer;transition:all .2s;margin-top:6px}
+.upload-zone:hover{border-color:#444}
+.upload-zone p{font-size:.6rem;color:#444;margin-top:4px}
+.upload-zone strong{font-size:.65rem;letter-spacing:.15em;color:#555}
+.img-grid-upload{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:4px;margin-top:8px}
+.iu{aspect-ratio:1;background:#0d0d0d;border:0.5px solid #1e1e1e;position:relative;overflow:hidden}
+.iu img{width:100%;height:100%;object-fit:cover}
+.iu .rm{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.8);color:#888;font-size:.5rem;cursor:pointer;padding:1px 4px;border:none}
+.upload-info{font-size:.58rem;color:#555;font-family:monospace;margin-top:6px}
+</style>
+</head>
+<body>
+<h1>DATA POET AI</h1>
+<div class="grid">
+<div style="display:flex;flex-direction:column;gap:10px">
+  <div class="panel">
+    <div class="pt">Parametri</div>
+    <label>Steps <span class="val" id="vs">20</span></label>
+    <input type="range" min="5" max="50" value="20" oninput="document.getElementById('vs').textContent=this.value" id="ps"/>
+    <label>CFG <span class="val" id="vc">7</span></label>
+    <input type="range" min="1" max="15" value="7" oninput="document.getElementById('vc').textContent=this.value" id="pc"/>
+
+    <label>Formato</label>
+    <div class="fmt-grid">
+      <div class="fmt-btn on" onclick="setFmt(this,768,768)"><span class="fmt-icon">■</span>768<br>sq</div>
+      <div class="fmt-btn" onclick="setFmt(this,1024,1024)"><span class="fmt-icon">■</span>1024<br>sq</div>
+      <div class="fmt-btn" onclick="setFmt(this,2048,2048)"><span class="fmt-icon">■</span>2048<br>sq HD</div>
+      <div class="fmt-btn" onclick="setFmt(this,768,1344)"><span class="fmt-icon" style="font-size:.6rem">▐</span>768<br>portrait</div>
+      <div class="fmt-btn" onclick="setFmt(this,1080,1920)"><span class="fmt-icon" style="font-size:.6rem">▐</span>1080<br>portrait</div>
+      <div class="fmt-btn" onclick="setFmt(this,2160,3840)"><span class="fmt-icon" style="font-size:.6rem">▐</span>2160<br>4K port</div>
+      <div class="fmt-btn" onclick="setFmt(this,1344,768)"><span class="fmt-icon" style="font-size:.6rem">▬</span>1344<br>land</div>
+      <div class="fmt-btn" onclick="setFmt(this,1920,1080)"><span class="fmt-icon" style="font-size:.6rem">▬</span>1920<br>land HD</div>
+      <div class="fmt-btn" onclick="setFmt(this,3840,2160)"><span class="fmt-icon" style="font-size:.6rem">▬</span>3840<br>4K land</div>
+      <div class="fmt-btn" onclick="setFmt(this,4096,4096)"><span class="fmt-icon">■</span>4096<br>print</div>
+      <div class="fmt-btn" onclick="setFmt(this,5000,5000)"><span class="fmt-icon">■</span>5000<br>print XL</div>
+      <div class="fmt-btn" id="fmt-custom-btn" onclick="focusCustom()"><span class="fmt-icon">+</span>custom<br>px</div>
+    </div>
+    <div class="custom-row">
+      <input type="number" id="cw" placeholder="W" min="64" max="8192" oninput="setCustomFmt()"/>
+      <span>×</span>
+      <input type="number" id="ch" placeholder="H" min="64" max="8192" oninput="setCustomFmt()"/>
+      <span>px</span>
+    </div>
+    <div class="res-info" id="res-info">768 × 768 px</div>
+
+    <label>Download</label>
+    <select id="dfmt">
+      <option value="png">PNG</option>
+      <option value="jpg">JPG</option>
+      <option value="tiff">TIFF</option>
+      <option value="webp">WebP</option>
+    </select>
+  </div>
+
+  <div class="panel">
+    <div class="pt">Stili salvati</div>
+    <div id="slist" style="max-height:200px;overflow-y:auto"></div>
+    <div style="display:flex;gap:5px;margin-top:6px">
+      <input type="text" id="sn" placeholder="nome..."/>
+      <input type="text" id="sv" placeholder="keywords..."/>
+      <button class="btn" onclick="addSt()">+</button>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="tabs">
+    <div class="tab on" onclick="switchTab(0)">Componi</div>
+    <div class="tab" onclick="switchTab(1)">Carica Immagini</div>
+    <div class="tab" onclick="switchTab(2)">Galleria</div>
+    <div class="tab" onclick="switchTab(3)">Video MP4</div>
+  </div>
+
+  <!-- TAB 0: COMPONI -->
+  <div class="tc on" id="tc0">
+    <div class="panel">
+      <div class="pt">Soggetto</div>
+      <label>Descrivi in italiano cosa vuoi ottenere</label>
+      <textarea id="sub" placeholder="Es: una donna cyberpunk con capelli rossi che guarda un tramonto su una città futuristica, atmosfera drammatica e neon..." oninput="updP()"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:5px">
+        <button class="btn-ai" onclick="ottimizzaPrompt()">✦ ottimizza con AI</button>
+      </div>
+      <label>Mood</label>
+      <div class="chips">
+        <span class="chip" data-v="cinematic lighting">cinematic</span>
+        <span class="chip" data-v="dark and moody">dark moody</span>
+        <span class="chip" data-v="high contrast">high contrast</span>
+        <span class="chip" data-v="dramatic shadows">dramatic</span>
+        <span class="chip" data-v="surreal dreamlike">surreal</span>
+        <span class="chip" data-v="noir">noir</span>
+        <span class="chip" data-v="ethereal glow">ethereal</span>
+        <span class="chip" data-v="neon lights">neon</span>
+      </div>
+      <label>Tecnica</label>
+      <div class="chips">
+        <span class="chip" data-v="oil painting">oil</span>
+        <span class="chip" data-v="digital art">digital</span>
+        <span class="chip" data-v="photography">photo</span>
+        <span class="chip" data-v="3d render octane">3D render</span>
+        <span class="chip" data-v="watercolor">watercolor</span>
+        <span class="chip" data-v="ink drawing">ink</span>
+        <span class="chip" data-v="concept art">concept art</span>
+        <span class="chip" data-v="hyperrealistic">hyperrealistic</span>
+      </div>
+      <label>Qualita</label>
+      <div class="chips">
+        <span class="chip on" data-v="masterpiece">masterpiece</span>
+        <span class="chip on" data-v="best quality">best quality</span>
+        <span class="chip" data-v="ultra detailed">ultra detail</span>
+        <span class="chip" data-v="sharp focus">sharp focus</span>
+        <span class="chip" data-v="8K resolution">8K</span>
+        <span class="chip" data-v="RAW photo">RAW photo</span>
+      </div>
+      <label>Prompt negativo</label>
+      <textarea id="neg" style="min-height:45px">lowres, bad anatomy, text, watermark, blurry, ugly, deformed, jpeg artifacts, cropped, worst quality</textarea>
+      <label>Preview prompt</label>
+      <div class="prev" id="prev">---</div>
+      <div style="display:flex;justify-content:flex-end;margin-top:4px">
+        <button class="btn" style="font-size:.5rem;padding:4px 8px" onclick="copyPrompt()">COPIA</button>
+      </div>
+      <div class="prog"><div class="progb" id="pb"></div></div>
+      <div class="row">
+        <button class="btn" onclick="updP()">Preview</button>
+        <button class="btn btn-w" onclick="doGen()">GENERA</button>
+        <span style="font-size:.55rem;color:#333;font-family:monospace;margin-left:auto" id="gen-info"></span>
+      </div>
+      <div class="st" id="gst"></div>
+    </div>
+  </div>
+
+  <!-- TAB 1: CARICA IMMAGINI -->
+  <div class="tc" id="tc1">
+    <div class="panel">
+      <div class="pt">Carica immagini → genera prompt automatico</div>
+      <label>Nome cartella / progetto</label>
+      <input type="text" id="folder-name" placeholder="es: portrait-serie-01, tokyo-landscapes, nft-collection-03..."/>
+      <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+        <strong>CLICCA O TRASCINA LE IMMAGINI</strong>
+        <p>jpg · png · webp · tiff — anche più file insieme</p>
+        <input type="file" id="file-input" multiple accept="image/*" style="display:none" onchange="handleUpload(this.files)"/>
+      </div>
+      <div id="upload-container" style="display:none">
+        <div class="upload-info" id="upload-info">0 immagini caricate</div>
+        <div class="img-grid-upload" id="img-grid-upload"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn-ai" onclick="analizzaImmagini()">✦ analizza stile e genera prompt</button>
+          <button class="btn" onclick="clearUpload()">svuota</button>
+        </div>
+      </div>
+      <div id="analysis-box" style="display:none;margin-top:12px">
+        <label>Prompt generato dall'analisi delle immagini</label>
+        <div class="prev" id="analysis-prompt" style="min-height:80px"></div>
+        <div class="row">
+          <button class="btn btn-w" onclick="usaPromptAnalisi()">USA QUESTO PROMPT</button>
+          <button class="btn" onclick="salvaStileAnalisi()">SALVA COME STILE</button>
+        </div>
+      </div>
+      <div class="st" id="ast"></div>
+    </div>
+  </div>
+
+  <!-- TAB 2: GALLERIA -->
+  <div class="tc" id="tc2">
+    <div class="panel">
+      <div class="pt">Galleria</div>
+      <div class="gal" id="gal"></div>
+    </div>
+  </div>
+
+  <!-- TAB 3: VIDEO MP4 -->
+  <div class="tc" id="tc3">
+    <div class="panel">
+      <div class="pt">Genera Video MP4</div>
+      <textarea id="vsub" placeholder="Descrivi il video..."></textarea>
+      <label>Frame <span class="val" id="vfr">16</span></label>
+      <input type="range" min="8" max="32" value="16" step="8" oninput="document.getElementById('vfr').textContent=this.value" id="pvfr"/>
+      <label>Steps <span class="val" id="vst2">20</span></label>
+      <input type="range" min="10" max="30" value="20" oninput="document.getElementById('vst2').textContent=this.value" id="pvst"/>
+      <div class="prog"><div class="progb" id="vpb"></div></div>
+      <div class="row"><button class="btn btn-w" onclick="doGenVideo()">GENERA VIDEO</button></div>
+      <div class="st" id="vgst"></div>
+      <div id="vgal" style="margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+/* ── STATO ── */
+var currentW = 768, currentH = 768;
+var uploadedFiles = [];
+
+var styles = JSON.parse(localStorage.getItem('dp2-st') || 'null') || [
+  {n:'NFT dark', v:'dark nft art, glitch, crypto punk, high contrast'},
+  {n:'Data Poet', v:'data visualization, generative algorithmic, abstract geometry'},
+  {n:'War signal', v:'war documentary photography, gritty, desaturated'},
+  {n:'Gold market', v:'golden metallic, financial data, bloomberg aesthetic'}
+];
+var actSt = [];
+var gal = JSON.parse(localStorage.getItem('dp2-gal') || '[]');
+
+/* ── FORMATO ── */
+function setFmt(el, w, h) {
+  document.querySelectorAll('.fmt-btn').forEach(function(b){ b.classList.remove('on'); });
+  el.classList.add('on');
+  currentW = w; currentH = h;
+  document.getElementById('cw').value = '';
+  document.getElementById('ch').value = '';
+  document.getElementById('res-info').textContent = w + ' × ' + h + ' px';
+  document.getElementById('gen-info').textContent = w + ' × ' + h;
+}
+
+function focusCustom() {
+  document.getElementById('cw').focus();
+}
+
+function setCustomFmt() {
+  var w = parseInt(document.getElementById('cw').value);
+  var h = parseInt(document.getElementById('ch').value);
+  if (w > 0 && h > 0) {
+    w = Math.min(w, 8192); h = Math.min(h, 8192);
+    currentW = w; currentH = h;
+    document.querySelectorAll('.fmt-btn').forEach(function(b){ b.classList.remove('on'); });
+    document.getElementById('fmt-custom-btn').classList.add('on');
+    document.getElementById('res-info').textContent = w + ' × ' + h + ' px (custom)';
+    document.getElementById('gen-info').textContent = w + ' × ' + h;
+  }
+}
+
+/* ── STILI ── */
+function saveSt() { localStorage.setItem('dp2-st', JSON.stringify(styles)); }
+
+function renderSt() {
+  document.getElementById('slist').innerHTML = styles.map(function(s, i) {
+    var on = actSt.indexOf(i) >= 0;
+    return '<div style="padding:6px 8px;font-size:.65rem;font-family:monospace;cursor:pointer;border-bottom:0.5px solid #1c1c1c;display:flex;justify-content:space-between;color:' + (on ? '#fff' : '#777') + '" onclick="togSt(' + i + ')">' +
+      '<span>' + s.n + '</span><span style="font-size:.5rem">' + (on ? 'ON' : '---') + '</span></div>';
+  }).join('');
+}
+
+function togSt(i) {
+  var x = actSt.indexOf(i);
+  if (x >= 0) actSt.splice(x, 1); else actSt.push(i);
+  renderSt(); updP();
+}
+
+function addSt() {
+  var n = document.getElementById('sn').value.trim();
+  var v = document.getElementById('sv').value.trim();
+  if (!n || !v) return;
+  styles.push({n: n, v: v}); saveSt();
+  document.getElementById('sn').value = '';
+  document.getElementById('sv').value = '';
+  renderSt();
+}
+
+/* ── CHIP ── */
+document.querySelectorAll('.chip[data-v]').forEach(function(c) {
+  c.addEventListener('click', function() { c.classList.toggle('on'); updP(); });
+});
+
+/* ── PROMPT ── */
+function buildP() {
+  var p = [];
+  var s = document.getElementById('sub').value.trim();
+  if (s) p.push(s);
+  actSt.forEach(function(i) { p.push(styles[i].v); });
+  document.querySelectorAll('#tc0 .chip.on[data-v]').forEach(function(c) { p.push(c.dataset.v); });
+  return p.join(', ');
+}
+
+function updP() { document.getElementById('prev').textContent = buildP() || '---'; }
+
+function copyPrompt() {
+  var txt = document.getElementById('prev').textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(txt);
+}
+
+function ottimizzaPrompt() {
+  var desc = document.getElementById('sub').value.trim();
+  if (!desc) { alert('Scrivi prima una descrizione!'); return; }
+  setSt('gst','lo','Invio a Claude per ottimizzazione...');
+  fetch('/api/claude', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      prompt: 'Sei un esperto di prompt per Stable Diffusion e ComfyUI. Trasforma questa descrizione in italiano in un prompt tecnico ottimizzato in inglese per generare immagini HD di alta qualità. Rispondi SOLO con il prompt, senza spiegazioni, senza virgolette. Descrizione: ' + desc
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.result) {
+      document.getElementById('sub').value = d.result;
+      updP();
+      setSt('gst','ok','Prompt ottimizzato!');
+    } else {
+      setSt('gst','err','Errore ottimizzazione');
+    }
+  })
+  .catch(function(){ setSt('gst','err','Server non raggiungibile'); });
+}
+
+function setSt(id, cls, msg) {
+  var e = document.getElementById(id);
+  e.className = 'st ' + cls;
+  e.textContent = msg;
+}
+
+/* ── TABS ── */
+function switchTab(n) {
+  document.querySelectorAll('.tab').forEach(function(t, i) { t.classList.toggle('on', i === n); });
+  document.querySelectorAll('.tc').forEach(function(t, i) { t.classList.toggle('on', i === n); });
+  if (n === 2) renderGal();
+}
+
+/* ── GENERA IMMAGINE ── */
+function doGen() {
+  var prompt = buildP();
+  if (!prompt) { alert('Scrivi il soggetto!'); return; }
+  var neg = document.getElementById('neg').value;
+  var steps = parseInt(document.getElementById('ps').value);
+  var cfg = parseFloat(document.getElementById('pc').value);
+  var seed = Math.floor(Math.random() * 999999999);
+  var wf = {
+    '1': {class_type: 'CheckpointLoaderSimple', inputs: {ckpt_name: 'dreamshaper-8-lcm.safetensors'}},
+    '2': {class_type: 'CLIPTextEncode', inputs: {clip: ['1', 1], text: prompt}},
+    '3': {class_type: 'CLIPTextEncode', inputs: {clip: ['1', 1], text: neg}},
+    '4': {class_type: 'KSampler', inputs: {cfg: cfg, denoise: 1, latent_image: ['5', 0], model: ['1', 0], negative: ['3', 0], positive: ['2', 0], sampler_name: 'dpmpp_2m', scheduler: 'karras', seed: seed, steps: steps}},
+    '5': {class_type: 'EmptyLatentImage', inputs: {batch_size: 1, height: currentH, width: currentW}},
+    '6': {class_type: 'VAEDecode', inputs: {samples: ['4', 0], vae: ['1', 2]}},
+    '7': {class_type: 'SaveImage', inputs: {filename_prefix: 'dp', images: ['6', 0]}}
+  };
+  setSt('gst', 'lo', 'Invio a ComfyUI... (' + currentW + '×' + currentH + ')');
+  var bar = document.getElementById('pb'), pct = 0;
+  var tmr = setInterval(function() { pct = Math.min(pct + 1, 90); bar.style.width = pct + '%'; }, 1000);
+  fetch('/generate', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: wf, client_id: 'dp-' + Date.now()})})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.prompt_id) { clearInterval(tmr); bar.style.width = '0%'; setSt('gst', 'err', 'Errore: ' + JSON.stringify(d)); return; }
+      setSt('gst', 'lo', 'Generando... ' + currentW + '×' + currentH + 'px');
+      var pid = d.prompt_id;
+      var poll = setInterval(function() {
+        fetch('/history/' + pid)
+          .then(function(r) { return r.json(); })
+          .then(function(hist) {
+            if (hist[pid] && hist[pid].outputs) {
+              clearInterval(poll); clearInterval(tmr); bar.style.width = '100%';
+              setTimeout(function() { bar.style.width = '0%'; }, 1000);
+              var imgs = [];
+              Object.values(hist[pid].outputs).forEach(function(o) {
+                if (o.images) o.images.forEach(function(i) { imgs.push(i); });
+              });
+              Promise.all(imgs.map(function(img) {
+                return fetch('/comfy-img/' + encodeURIComponent(img.filename))
+                  .then(function(r) { return r.blob(); })
+                  .then(function(b) {
+                    return new Promise(function(res) {
+                      var rd = new FileReader();
+                      rd.onload = function(ev) { res(ev.target.result); };
+                      rd.readAsDataURL(b);
+                    });
+                  });
+              })).then(function(urls) {
+                var folder = document.getElementById('folder-name') ? document.getElementById('folder-name').value.trim() : '';
+                urls.forEach(function(du) {
+                  gal.unshift({img: du, prompt: prompt, date: new Date().toISOString().split('T')[0], size: currentW + 'x' + currentH, folder: folder});
+                });
+                localStorage.setItem('dp2-gal', JSON.stringify(gal.slice(0, 100)));
+                renderGal();
+                setSt('gst', 'ok', 'Immagine generata! ' + currentW + '×' + currentH + 'px');
+                switchTab(2);
+              });
+            }
+          });
+      }, 2000);
+      setTimeout(function() { clearInterval(poll); clearInterval(tmr); bar.style.width = '0%'; setSt('gst', 'err', 'Timeout'); }, 300000);
+    })
+    .catch(function(e) { clearInterval(tmr); bar.style.width = '0%'; setSt('gst', 'err', 'Errore: ' + e.message); });
+}
+
+/* ── DOWNLOAD ── */
+function dl(dataUrl, i) {
+  var fmt = document.getElementById('dfmt').value;
+  var item = gal[i];
+  var base = 'dp-' + (item.folder ? item.folder + '-' : '') + i;
+  var a = document.createElement('a');
+  if (fmt === 'jpg') {
+    var cv = document.createElement('canvas');
+    var img = new Image();
+    img.onload = function() {
+      cv.width = img.width; cv.height = img.height;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, 0, 0);
+      a.href = cv.toDataURL('image/jpeg', 0.95);
+      a.download = base + '.jpg'; a.click();
+    };
+    img.src = dataUrl;
+  } else if (fmt === 'webp') {
+    var cv2 = document.createElement('canvas');
+    var img2 = new Image();
+    img2.onload = function() {
+      cv2.width = img2.width; cv2.height = img2.height;
+      cv2.getContext('2d').drawImage(img2, 0, 0);
+      a.href = cv2.toDataURL('image/webp', 0.95);
+      a.download = base + '.webp'; a.click();
+    };
+    img2.src = dataUrl;
+  } else {
+    a.href = dataUrl; a.download = base + '.' + fmt; a.click();
+  }
+}
+
+function delImg(i) {
+  gal.splice(i, 1);
+  localStorage.setItem('dp2-gal', JSON.stringify(gal));
+  renderGal();
+}
+
+function renderGal() {
+  var el = document.getElementById('gal');
+  if (!gal.length) { el.innerHTML = '<div class="gempty">Nessuna opera</div>'; return; }
+  el.innerHTML = gal.map(function(g, i) {
+    var info = (g.size ? g.size + 'px' : '') + (g.folder ? ' · ' + g.folder : '');
+    return '<div class="gi"><img src="' + g.img + '" loading="lazy"/>' +
+      '<div class="ov">' +
+      '<div style="font-size:.48rem;color:#aaa;text-align:center;line-height:1.4">' + (info ? info + '<br>' : '') + g.prompt.substring(0, 40) + '...</div>' +
+      '<button class="btn" style="font-size:.5rem;padding:3px 8px" onclick="dl(gal[' + i + '].img,' + i + ')">Salva</button>' +
+      '<button class="btn" style="font-size:.5rem;padding:3px 8px" onclick="delImg(' + i + ')">X</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+/* ── UPLOAD IMMAGINI ── */
+function handleUpload(files) {
+  var grid = document.getElementById('img-grid-upload');
+  var container = document.getElementById('upload-container');
+  Array.from(files).forEach(function(file) {
+    uploadedFiles.push(file);
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var cell = document.createElement('div');
+      cell.className = 'iu';
+      var idx = uploadedFiles.length - 1;
+      cell.innerHTML = '<img src="' + e.target.result + '"/><button class="rm" onclick="removeUpload(' + idx + ',this)">×</button>';
+      grid.appendChild(cell);
+      document.getElementById('upload-info').textContent = grid.children.length + ' immagini caricate';
+    };
+    reader.readAsDataURL(file);
+  });
+  container.style.display = 'block';
+}
+
+function removeUpload(idx, btn) {
+  uploadedFiles[idx] = null;
+  btn.parentElement.remove();
+  document.getElementById('upload-info').textContent = document.getElementById('img-grid-upload').children.length + ' immagini caricate';
+}
+
+function clearUpload() {
+  uploadedFiles = [];
+  document.getElementById('img-grid-upload').innerHTML = '';
+  document.getElementById('upload-container').style.display = 'none';
+  document.getElementById('analysis-box').style.display = 'none';
+  document.getElementById('file-input').value = '';
+}
+
+function analizzaImmagini() {
+  var validi = uploadedFiles.filter(function(f){ return f !== null; });
+  if (!validi.length) { alert('Carica almeno un\'immagine!'); return; }
+  var folder = document.getElementById('folder-name').value.trim() || 'senza nome';
+  setSt('ast','lo','Analisi in corso...');
+  document.getElementById('analysis-box').style.display = 'block';
+  document.getElementById('analysis-prompt').textContent = 'analisi in corso...';
+
+  var reads = validi.slice(0,6).map(function(file){
+    return new Promise(function(res){
+      var rd = new FileReader();
+      rd.onload = function(e){ res(e.target.result); };
+      rd.readAsDataURL(file);
+    });
+  });
+
+  Promise.all(reads).then(function(dataUrls){
+    fetch('/api/claude-vision', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        images: dataUrls,
+        folder: folder,
+        prompt: 'Analizza queste ' + dataUrls.length + ' immagini della cartella "' + folder + '". Identifica: palette cromatica dominante, mood/atmosfera, stile artistico, tecnica visiva, soggetti principali, qualità HD. Poi genera UN SOLO prompt in inglese ottimizzato per Stable Diffusion / ComfyUI che catturi lo stile comune di queste immagini. Rispondi SOLO con il prompt finale, senza spiegazioni.'
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.result){
+        document.getElementById('analysis-prompt').textContent = d.result;
+        setSt('ast','ok','Analisi completata — ' + validi.length + ' immagini · cartella: ' + folder);
+      } else {
+        setSt('ast','err','Errore analisi');
+      }
+    })
+    .catch(function(){
+      var fallback = 'masterpiece, best quality, ultra detailed, cinematic lighting, high contrast, sharp focus';
+      document.getElementById('analysis-prompt').textContent = fallback;
+      setSt('ast','err','Server AI non raggiungibile — prompt base generato');
+    });
+  });
+}
+
+function usaPromptAnalisi() {
+  var p = document.getElementById('analysis-prompt').textContent;
+  document.getElementById('sub').value = p;
+  updP();
+  switchTab(0);
+}
+
+function salvaStileAnalisi() {
+  var folder = document.getElementById('folder-name').value.trim() || 'analisi-' + Date.now();
+  var p = document.getElementById('analysis-prompt').textContent;
+  styles.push({n: folder, v: p});
+  saveSt(); renderSt();
+  setSt('ast','ok','Stile "' + folder + '" salvato!');
+}
+
+/* ── VIDEO ── */
+function doGenVideo() {
+  var prompt = document.getElementById('vsub').value.trim();
+  if (!prompt) { alert('Scrivi la descrizione!'); return; }
+  var frames = parseInt(document.getElementById('pvfr').value);
+  var steps = parseInt(document.getElementById('pvst').value);
+  var seed = Math.floor(Math.random() * 999999999);
+  var wf = {
+    '1':{class_type:'CheckpointLoaderSimple',inputs:{ckpt_name:'dreamshaper-8-lcm.safetensors'}},
+    '2':{class_type:'CLIPTextEncode',inputs:{clip:['1',1],text:prompt+', high quality, smooth motion'}},
+    '3':{class_type:'CLIPTextEncode',inputs:{clip:['1',1],text:'lowres, bad anatomy, text, watermark, blurry'}},
+    '4':{class_type:'ADE_AnimateDiffLoaderWithContext',inputs:{model:['1',0],motion_model:'mm_sd_v15_v2.ckpt',beta_schedule:'linear (CosineAnnealingLR)',motion_scale:1}},
+    '5':{class_type:'EmptyLatentImage',inputs:{batch_size:frames,height:512,width:512}},
+    '6':{class_type:'KSampler',inputs:{cfg:7,denoise:1,latent_image:['5',0],model:['4',0],negative:['3',0],positive:['2',0],sampler_name:'lcm',scheduler:'sgm_uniform',seed:seed,steps:steps}},
+    '7':{class_type:'VAEDecode',inputs:{samples:['6',0],vae:['1',2]}},
+    '8':{class_type:'ADE_AnimateDiffCombine',inputs:{images:['7',0],frame_rate:8,loop_count:0,filename_prefix:'video',format:'video/h264-mp4',pingpong:false,save_output:true}}
+  };
+  setSt('vgst','lo','Generando video... (3-5 minuti)');
+  var bar=document.getElementById('vpb'),pct=0;
+  var tmr=setInterval(function(){pct=Math.min(pct+0.5,90);bar.style.width=pct+'%';},2000);
+  fetch('/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:wf,client_id:'dpv-'+Date.now()})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.prompt_id){clearInterval(tmr);bar.style.width='0%';setSt('vgst','err','Errore: '+JSON.stringify(d));return;}
+      var pid=d.prompt_id;
+      var poll=setInterval(function(){
+        fetch('/history/'+pid).then(function(r){return r.json();}).then(function(hist){
+          if(hist[pid]&&hist[pid].outputs){
+            clearInterval(poll);clearInterval(tmr);bar.style.width='100%';
+            setTimeout(function(){bar.style.width='0%';},1000);
+            var vids=[];
+            Object.values(hist[pid].outputs).forEach(function(o){
+              if(o.gifs)o.gifs.forEach(function(v){vids.push(v);});
+              if(o.videos)o.videos.forEach(function(v){vids.push(v);});
+            });
+            if(vids.length){
+              setSt('vgst','ok','Video generato!');
+              document.getElementById('vgal').innerHTML=vids.map(function(v){
+                var url='/comfy-video/'+encodeURIComponent(v.filename);
+                return '<div style="margin-top:10px"><video controls style="width:100%;border:0.5px solid #333" src="'+url+'"></video><div class="row"><a class="btn btn-w" href="'+url+'" download="'+v.filename+'">Scarica MP4</a></div></div>';
+              }).join('');
+            } else {
+              setSt('vgst','err','Nessun video - riprova');
+            }
+          }
+        });
+      },3000);
+      setTimeout(function(){clearInterval(poll);clearInterval(tmr);bar.style.width='0%';setSt('vgst','err','Timeout');},300000);
+    }).catch(function(e){clearInterval(tmr);bar.style.width='0%';setSt('vgst','err','Errore: '+e.message);});
+}
+
+/* ── INIT ── */
+renderSt(); updP(); renderGal();
+document.getElementById('gen-info').textContent = currentW + ' × ' + currentH;
+
+/* drag & drop upload */
+document.addEventListener('dragover', function(e){ e.preventDefault(); });
+document.addEventListener('drop', function(e){
+  e.preventDefault();
+  var files = e.dataTransfer.files;
+  if(files.length) handleUpload(files);
+});
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 
 const SITE = './site';
 const PORT = process.env.PORT || 8888;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
 const mime = {
   '.html': 'text/html',
@@ -18,9 +19,103 @@ const mime = {
 
 console.log('✅ Atelier AI starting...');
 
+// Helper: legge body POST
+function readBody(req) {
+  return new Promise((resolve) => {
+    let b = '';
+    req.on('data', d => b += d);
+    req.on('end', () => resolve(b));
+  });
+}
+
 http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
 
+  // ── CORS preflight ──
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' });
+    res.end(); return;
+  }
+
+  // ── /api/claude — ottimizza prompt testo ──
+  if (url === '/api/claude' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const prompt = body.prompt || '';
+      const r = await fetch('http://127.0.0.1:11434/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-opus-4-5',
+          max_tokens: 300,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const d = await r.json();
+      const result = d.content?.[0]?.text || '';
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ result }));
+    } catch(e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── /api/claude-vision — analizza immagini e genera prompt ──
+  if (url === "/api/claude-vision" && req.method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const images = body.images || [];
+      const folder = body.folder || "";
+      const imageData = images.slice(0,4).map(d => { const m = d.match(/^data:image\/[a-z]+;base64,(.+)$/); return m ? m[1] : null; }).filter(Boolean);
+      const prompt = 'Analyze these images from folder "' + folder + '". Generate ONE Stable Diffusion prompt in English. Reply ONLY with the prompt.';
+      const r = await fetch('http://127.0.0.1:11434/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'llava', prompt, images: imageData, stream: false }) });
+      const d = await r.json();
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ result: d.response || '' }));
+    } catch(e) { res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ error: e.message })); }
+    return;
+  }
+  if (url === '/api/claude-vision-OLD' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const images = body.images || [];   // array di dataUrl base64
+      const folder = body.folder || '';
+      const promptText = body.prompt || '';
+
+      // Costruisce i content blocks: fino a 6 immagini + testo
+      const content = [];
+      images.slice(0, 6).forEach(dataUrl => {
+        const match = dataUrl.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+        if (match) {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: match[1], data: match[2] }
+          });
+        }
+      });
+      content.push({ type: 'text', text: promptText });
+
+      const r = await fetch('http://127.0.0.1:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'llava', prompt: prompt, stream: false })
+      });
+      const d = await r.json();
+      const result = d.response || '';
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ result }));
+    } catch(e) {
+      res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
 
   if(url.startsWith('/simulate-date/')){
     const date=url.replace('/simulate-date/','');
@@ -32,7 +127,6 @@ http.createServer(async (req, res) => {
       return;
     }
     try{
-      // Genera segnali deterministici dalla data
       const seed=selDate.getTime();
       const rng=(s)=>{let x=Math.sin(s)*10000;return x-Math.floor(x);};
       const hasETH=selDate>=new Date('2015-07-30');
@@ -87,8 +181,7 @@ http.createServer(async (req, res) => {
         }
       }catch(e){console.log('Wiki error:',e.message);}
       const state={
-        date,
-        simulated:true,
+        date,simulated:true,
         signals:{war,crisis,economy,politics,human,tech},
         clima:climaMap[dominant],
         metals:[{name:'Gold',price:goldPrice,change:0},{name:'Silver',price:silverPrice,change:0}],
@@ -138,6 +231,79 @@ http.createServer(async (req, res) => {
       res.writeHead(500);
       res.end(JSON.stringify({ error: e.message }));
     }
+    return;
+  }
+
+  if(url.startsWith('/comfy/') || url === '/comfy'){
+    const target=url.replace('/comfy','');
+    const opts={hostname:'127.0.0.1',port:8188,path:target||'/',method:req.method,headers:{'Content-Type':'application/json'}};
+    const pr=http.request(opts,(r2)=>{
+      const h={...r2.headers,'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'};
+      res.writeHead(r2.statusCode,h);
+      r2.pipe(res);
+    });
+    pr.on('error',(e)=>{res.writeHead(502);res.end(JSON.stringify({error:e.message}));});
+    if(req.method==='POST'){
+      let b='';req.on('data',d=>b+=d);req.on('end',()=>{pr.write(b);pr.end();});
+    } else { pr.end(); }
+    return;
+  }
+
+  if(url === '/generate' && req.method === 'POST'){
+    let body='';
+    req.on('data',d=>body+=d);
+    req.on('end',async()=>{
+      try{
+        const payload=JSON.parse(body);
+        const r=await fetch('https://unsalably-winiest-ngoc.ngrok-free.dev/prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        const d=await r.json();
+        res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'});
+        res.end(JSON.stringify(d));
+      }catch(e){res.writeHead(500);res.end(JSON.stringify({error:e.message}));}
+    });
+    return;
+  }
+
+  if(url.startsWith('/history/') && req.method === 'GET'){
+    try{
+      const r=await fetch('https://unsalably-winiest-ngoc.ngrok-free.dev'+url);
+      const d=await r.json();
+      res.writeHead(200,{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'});
+      res.end(JSON.stringify(d));
+    }catch(e){res.writeHead(500);res.end(JSON.stringify({error:e.message}));}
+    return;
+  }
+
+  if(url.startsWith('/comfy-video/')){
+    const fname=decodeURIComponent(url.replace('/comfy-video/',''));
+    const fp='/Users/marcobonafe/Desktop/ComfyUI/output/'+fname;
+    if(!fs.existsSync(fp)){res.writeHead(404);res.end('not found');return;}
+    res.writeHead(200,{'Content-Type':'video/mp4','Access-Control-Allow-Origin':'*'});
+    fs.createReadStream(fp).pipe(res);
+    return;
+  }
+
+  if(url.startsWith('/comfy-img/')){
+    const fname=decodeURIComponent(url.replace('/comfy-img/',''));
+    const fp='/Users/marcobonafe/Desktop/ComfyUI/output/'+fname;
+    console.log('CERCO:',fp,'EXISTS:',fs.existsSync(fp));
+    if(!fs.existsSync(fp)){res.writeHead(404);res.end('not found');return;}
+    res.writeHead(200,{'Content-Type':'image/png','Access-Control-Allow-Origin':'*'});
+    fs.createReadStream(fp).pipe(res);
+    return;
+  }
+
+  if(url.startsWith('/view')){
+    try{
+      const fullUrl='https://unsalably-winiest-ngoc.ngrok-free.dev'+url;
+      const r=await fetch(fullUrl);
+      if(!r.ok){res.writeHead(r.status);res.end('error '+r.status);return;}
+      const ct=r.headers.get('content-type')||'image/png';
+      const buf=await r.arrayBuffer();
+      const b=Buffer.from(buf);
+      res.writeHead(200,{'Content-Type':ct,'Content-Length':b.length,'Access-Control-Allow-Origin':'*'});
+      res.end(b);
+    }catch(e){res.writeHead(500);res.end(e.message);}
     return;
   }
 

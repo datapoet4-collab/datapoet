@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden}
+#wrap{position:relative;width:500px;height:888px}
+img#frame{width:500px;height:888px;object-fit:cover;display:block}
+#hud{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:'Courier New',monospace}
+#info{position:absolute;top:16px;left:16px;font-size:9px;line-height:2;letter-spacing:2px;color:#ff1400}
+#cur{position:absolute;bottom:55px;left:16px;font-size:11px;letter-spacing:3px;color:#ff1400}
+#wm{position:absolute;bottom:16px;right:16px;font-size:8px;letter-spacing:2px;color:rgba(255,255,255,0.15)}
+#prog{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff1400;font-size:11px;letter-spacing:3px;text-align:center}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <img id="frame" src="" alt="">
+  <div id="hud">
+    <div id="info">NOISE — 04/07/2026<br>RENDERING...</div>
+    <div id="cur"></div>
+    <div id="wm">DATA POET · NOISE #001 · 1/1</div>
+  </div>
+  <div id="prog" id="prog">RENDERING FRAMES...<br><span id="pct">0%</span></div>
+</div>
+<script>
+const SIGNALS=[
+  {t:'2026 Iran war',   c:'war',     col:'rgb(220,15,5)'},
+  {t:'Trump Threats',   c:'war',     col:'rgb(200,10,3)'},
+  {t:'F-35 Got Hit',    c:'war',     col:'rgb(180,8,2)'},
+  {t:'Donald Trump',    c:'politics',col:'rgb(180,140,0)'},
+  {t:'Iran Negotiations',c:'politics',col:'rgb(160,10,240)'},
+  {t:'Tucker Carlson',  c:'politics',col:'rgb(140,8,220)'},
+  {t:'Artemis II',      c:'tech',    col:'rgb(0,200,255)'},
+  {t:'MegaTrain LLMs',  c:'tech',    col:'rgb(0,180,245)'},
+  {t:'WrestleMania 42', c:'culture', col:'rgb(255,170,0)'},
+  {t:'Kanye West',      c:'culture', col:'rgb(240,150,0)'},
+  {t:'Deaths in 2026',  c:'human',   col:'rgb(0,220,100)'},
+  {t:'Christina Koch',  c:'human',   col:'rgb(0,200,90)'},
+];
+const TOTAL=900, SIG_FRAMES=75;
+let currentFrame=0, maxFrame=0, playing=false;
+
+async function checkFrames(){
+  const r = await fetch('/noise_status');
+  const d = await r.json();
+  maxFrame = d.frames;
+  document.getElementById('pct').textContent = d.pct+'%';
+  if(maxFrame > 10 && !playing){
+    playing=true;
+    document.getElementById('prog').style.display='none';
+    play();
+  }
+}
+
+function play(){
+  if(currentFrame >= maxFrame - 5){
+    currentFrame = 0;
+  }
+  const f = String(currentFrame).padStart(5,'0');
+  const img = document.getElementById('frame');
+  img.src = `/noise_frame/${f}?t=${Date.now()}`;
+  img.onload = () => {
+    const sigIdx = Math.min(Math.floor(currentFrame/SIG_FRAMES), SIGNALS.length-1);
+    const sig = SIGNALS[sigIdx];
+    document.getElementById('info').style.color = sig.col;
+    document.getElementById('info').innerHTML = `NOISE — 04/07/2026<br>${sig.c.toUpperCase()} · CRITICAL`;
+    document.getElementById('cur').style.color = sig.col;
+    document.getElementById('cur').textContent = '▶ '+sig.t;
+    currentFrame++;
+    setTimeout(play, 1000/30);
+  };
+  img.onerror = () => { setTimeout(play, 100); };
+}
+
+setInterval(checkFrames, 1000);
+checkFrames();
+</script>
+</body>
+</html>

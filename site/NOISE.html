@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh;font-family:'Courier New',monospace}
+canvas{display:block}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;mix-blend-mode:screen}
+#sig{position:absolute;top:20px;left:20px;font-size:8px;line-height:2.4;letter-spacing:3px;opacity:0.9}
+#headline{position:absolute;bottom:120px;left:20px;right:20px;font-size:13px;letter-spacing:4px;line-height:1.8;text-transform:uppercase}
+#date{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);font-size:8px;letter-spacing:4px;opacity:0.4}
+#tension{position:absolute;bottom:80px;left:20px;right:20px;height:1px;background:rgba(255,255,255,0.08)}
+#tfill{height:1px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="sig"></div>
+  <div id="headline"></div>
+  <div id="tension"><div id="tfill"></div></div>
+  <div id="date">DATA POET · NOISE #001 · 04/07/2026</div>
+</div>
+<script>
+const W=540,H=960;
+const c=document.getElementById('c');
+c.width=W;c.height=H;
+const gl=c.getContext('webgl');
+
+const VS=`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+
+const FS=`
+precision highp float;
+uniform vec2 res;
+uniform float time;
+uniform float scene_id;
+uniform vec3 c1;
+uniform vec3 c2;
+uniform vec3 c3;
+uniform float morph;
+uniform float tension;
+uniform float chaos;
+
+#define PI 3.14159265
+#define TAU 6.28318530
+
+float hash11(float n){return fract(sin(n)*43758.5453);}
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float hash3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
+
+float noise(vec2 p){
+  vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);
+}
+float noise3(vec3 p){
+  vec3 i=floor(p);vec3 f=fract(p);f=f*f*(3.-2.*f);
+  float n=i.x+i.y*57.+i.z*113.;
+  return mix(mix(mix(hash11(n),hash11(n+1.),f.x),mix(hash11(n+57.),hash11(n+58.),f.x),f.y),
+             mix(mix(hash11(n+113.),hash11(n+114.),f.x),mix(hash11(n+170.),hash11(n+171.),f.x),f.y),f.z);
+}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<6;i++){v+=a*noise(p);p*=2.1;a*=.5;}return v;}
+float fbm3(vec3 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise3(p);p*=2.1;a*=.5;}return v;}
+
+float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+float smax(float a,float b,float k){return -smin(-a,-b,k);}
+float sdSph(vec3 p,float r){return length(p)-r;}
+float sdBox(vec3 p,vec3 b){vec3 d=abs(p)-b;return length(max(d,0.))+min(max(d.x,max(d.y,d.z)),0.);}
+float sdCyl(vec3 p,float r,float h){vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.));}
+float sdTorus(vec3 p,float R,float r){return length(vec2(length(p.xz)-R,p.y))-r;}
+float sdCap(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;return length(pa-ba*clamp(dot(pa,ba)/dot(ba,ba),0.,1.))-r;}
+float sdOct(vec3 p,float s){p=abs(p);return(p.x+p.y+p.z-s)*0.57735;}
+float sdCone(vec3 p,float r,float h){float q=length(p.xz);return max(q*h/r+p.y-h,-p.y)/(sqrt(1.+h*h/r/r));}
+
+// ROTAZIONI
+vec3 rotX(vec3 p,float a){float c=cos(a),s=sin(a);return vec3(p.x,c*p.y-s*p.z,s*p.y+c*p.z);}
+vec3 rotY(vec3 p,float a){float c=cos(a),s=sin(a);return vec3(c*p.x+s*p.z,p.y,-s*p.x+c*p.z);}
+vec3 rotZ(vec3 p,float a){float c=cos(a),s=sin(a);return vec3(c*p.x-s*p.y,s*p.x+c*p.y,p.z);}
+
+// RIPETIZIONE SPAZIALE INFINITA
+vec3 rep(vec3 p,vec3 c4){return mod(p+0.5*c4,c4)-0.5*c4;}
+
+// ============================================================
+// SCENE — ognuna e' un mondo diverso
+// ============================================================
+
+// SCENE 0: WAR — missili, frammenti, esplosioni
+float scene_war(vec3 p,float t){
+  float d=1e10;
+  // missile centrale
+  vec3 q=rotZ(rotY(p,t*0.3),sin(t*0.2)*0.3);
+  float body=sdCyl(q,0.08,0.9);
+  float tip=sdCone(q-vec3(0.,0.9,0.),0.08,0.28);
+  float fin1=sdBox(q-vec3(0.,-0.6,0.),vec3(0.22,0.1,0.012));
+  float fin2=sdBox(q-vec3(0.,-0.6,0.),vec3(0.012,0.1,0.22));
+  d=smin(body,tip,0.04);
+  d=smin(d,fin1,0.01);d=smin(d,fin2,0.01);
+  // deformazione frattura
+  d+=fbm3(p*4.+t*0.5)*0.04*chaos;
+  // frammenti orbitanti — tanti
+  for(int i=0;i<8;i++){
+    float fi=float(i);
+    float ang=fi/8.*TAU+t*(0.5+fi*0.12);
+    float r2=1.2+sin(t*0.7+fi)*0.4;
+    float fy=sin(t*0.4+fi*1.3)*0.6;
+    vec3 fp=p-vec3(cos(ang)*r2,fy,sin(ang)*r2);
+    fp=rotY(rotX(fp,t*(0.3+fi*0.1)),t*(0.2+fi*0.07));
+    float fs=0.04+fi*0.02;
+    if(i<3) d=min(d,sdOct(fp,fs));
+    else if(i<6) d=min(d,sdBox(fp,vec3(fs,fs*0.3,fs*0.6)));
+    else d=min(d,sdSph(fp,fs*0.8));
+  }
+  // sfere di fuoco/esplosione lontane
+  for(int i=0;i<6;i++){
+    float fi=float(i);
+    float ang=fi/6.*TAU+t*0.15;
+    float r2=2.5+sin(fi*2.3)*0.5;
+    vec3 bp=p-vec3(cos(ang)*r2,sin(fi*1.7+t*0.2)*1.2,sin(ang)*r2);
+    float br=0.15+sin(t*2.+fi)*0.08;
+    d=min(d,sdSph(bp,br));
+  }
+  return d;
+}
+
+// SCENE 1: POLITICS — busti, simboli potere, distorsione
+float scene_politics(vec3 p,float t){
+  float d=1e10;
+  // busto centrale deformato
+  vec3 q=p;
+  q.x+=sin(p.y*6.+t*2.)*0.08*chaos*(q.x>0.?2.:0.3);
+  // testa
+  float head=sdSph(q-vec3(0.,0.55,0.),0.35+sin(t*1.5)*0.02*chaos);
+  // collo
+  float neck=sdCyl(q-vec3(0.,0.1,0.),0.12,0.2);
+  // spalle
+  float shl=sdBox(q-vec3(0.,-0.15,0.),vec3(0.55,0.18,0.28));
+  float shlR=sdSph(q-vec3(0.58,-0.05,0.),0.24);
+  float shlL=sdSph(q-vec3(-0.58,-0.05,0.),0.24);
+  d=smin(head,neck,0.08);
+  d=smin(d,shl,0.12);d=smin(d,shlR,0.08);d=smin(d,shlL,0.08);
+  // simboli potere che orbitano
+  for(int i=0;i<5;i++){
+    float fi=float(i);
+    float ang=fi/5.*TAU+t*0.4;
+    float r2=1.6+sin(t*0.5+fi)*0.3;
+    vec3 sp=p-vec3(cos(ang)*r2,sin(fi*1.2+t*0.3)*0.8,sin(ang)*r2);
+    sp=rotY(rotX(sp,t*0.5),t*0.3);
+    if(i<2) d=min(d,sdOct(sp,0.12));
+    else d=min(d,sdBox(sp,vec3(0.1,0.1,0.1)));
+  }
+  // tori — simbolo potere
+  float tor1=sdTorus(rotX(p-vec3(0.,0.55,0.),t*0.4),0.55,0.025);
+  float tor2=sdTorus(rotZ(p-vec3(0.,0.55,0.),t*0.3),0.65,0.018);
+  d=min(d,tor1);d=min(d,tor2);
+  return d;
+}
+
+// SCENE 2: TECH — razzo, satelliti, circuiti
+float scene_tech(vec3 p,float t){
+  float d=1e10;
+  // razzo principale
+  vec3 q=rotZ(p,sin(t*0.15)*0.08);
+  float body=sdCyl(q,0.2,1.1);
+  float tip=sdCone(q-vec3(0.,1.1,0.),0.2,0.45);
+  float tankL=sdCyl(q-vec3(-0.32,0.,0.),0.09,0.82);
+  float tankR=sdCyl(q-vec3(0.32,0.,0.),0.09,0.82);
+  float noz1=sdCyl(q-vec3(0.,-1.12,0.),0.12,0.09);
+  float noz2=sdCyl(q-vec3(-0.22,-1.1,0.),0.06,0.07);
+  float noz3=sdCyl(q-vec3(0.22,-1.1,0.),0.06,0.07);
+  // glitch digitale
+  float glitch=floor(sin(q.y*18.+t*5.)*5.)/5.*0.015*chaos;
+  d=smin(body+glitch,tip+glitch,0.05);
+  d=smin(d,tankL,0.03);d=smin(d,tankR,0.03);
+  d=smin(d,noz1,0.03);d=smin(d,noz2,0.02);d=smin(d,noz3,0.02);
+  // anelli struttura
+  for(int i=0;i<4;i++){
+    float fy=-.6+float(i)*.4;
+    d=min(d,sdTorus(q-vec3(0.,fy,0.),0.2,0.015));
+  }
+  // satelliti orbitanti
+  for(int i=0;i<4;i++){
+    float fi=float(i);
+    float ang=fi/4.*TAU+t*(0.6+fi*0.1);
+    float r2=2.0+fi*0.2;
+    vec3 sp=p-vec3(cos(ang)*r2,sin(fi+t*0.3)*0.5,sin(ang)*r2);
+    sp=rotY(sp,t*0.5);
+    float satBody=sdBox(sp,vec3(0.12,0.06,0.06));
+    float panL=sdBox(sp-vec3(-0.25,0.,0.),vec3(0.1,0.2,0.01));
+    float panR=sdBox(sp-vec3(0.25,0.,0.),vec3(0.1,0.2,0.01));
+    d=min(d,smin(satBody,smin(panL,panR,0.01),0.01));
+  }
+  // punti dati volanti
+  for(int i=0;i<12;i++){
+    float fi=float(i);
+    float ang=fi/12.*TAU*1.618+t*0.3;
+    float ht=sin(fi*2.+t*0.4)*1.5;
+    float r2=0.8+fi*0.15;
+    d=min(d,sdSph(p-vec3(cos(ang)*r2,ht,sin(ang)*r2),0.025+fi*0.008));
+  }
+  return d;
+}
+
+// SCENE 3: CULTURE — microfono, corona, onde
+float scene_culture(vec3 p,float t){
+  float d=1e10;
+  float pulse=sin(t*3.)*0.5+0.5;
+  // microfono centrale
+  vec3 q=p;
+  q+=sin(length(q)*6.-t*4.)*0.02*chaos*pulse;
+  float mhead=sdSph(q-vec3(0.,0.5,0.),0.28);
+  float mgrid=sdSph(q-vec3(0.,0.5,0.),0.26);
+  float mstem=sdCyl(q,0.045,0.45);
+  float mbase=sdTorus(q-vec3(0.,-0.5,0.),0.22,0.045);
+  d=mhead;d=max(d,-(mgrid-0.02));
+  d=smin(d,mstem,0.04);d=smin(d,mbase,0.04);
+  // corona
+  for(int i=0;i<7;i++){
+    float fi=float(i);
+    float ang=fi/7.*TAU;
+    float h=0.12+sin(fi*1.3)*0.06;
+    vec3 tp=p-vec3(cos(ang)*0.22,0.85+h,sin(ang)*0.22);
+    d=min(d,sdBox(tp,vec3(0.03,h,0.03)));
+  }
+  float crownB=sdTorus(p-vec3(0.,0.82,0.),0.22,0.03);
+  d=smin(d,crownB,0.02);
+  // onde sonore espanse
+  for(int i=1;i<6;i++){
+    float fi=float(i);
+    float r2=fi*0.5+sin(t*2.+fi)*0.05;
+    float wave=sdTorus(p-vec3(0.,0.5,0.),r2,0.012-fi*0.001);
+    d=min(d,wave);
+  }
+  // sfere che pulsano attorno
+  for(int i=0;i<8;i++){
+    float fi=float(i);
+    float ang=fi/8.*TAU+t*(0.8+fi*0.05);
+    float r2=1.4+sin(t*2.+fi)*0.3*pulse;
+    float fy=sin(fi*0.9+t*1.2)*0.5;
+    float sr=0.06+sin(t*3.+fi)*0.03*pulse;
+    d=min(d,sdSph(p-vec3(cos(ang)*r2,fy,sin(ang)*r2),sr));
+  }
+  return d;
+}
+
+// SCENE 4: HUMAN — figura, dissoluzione, drip
+float scene_human(vec3 p,float t){
+  float d=1e10;
+  // figura che si dissolve
+  float melt=sin(t*0.5)*0.5+0.5;
+  vec3 q=p;
+  q.y-=max(0.,sin(t*0.6+p.x*3.))*0.06*melt*chaos;
+  q+=vec3(sin(p.y*4.+t)*0.025,0.,cos(p.x*4.+t*.8)*0.02)*chaos;
+  // testa
+  float head=sdSph(q-vec3(0.,0.82,0.),0.22);
+  // torso
+  float torso=sdBox(q-vec3(0.,0.22,0.),vec3(0.2,0.36,0.14));
+  // braccia
+  float armL=sdCap(q,vec3(-0.26,0.42,0.),vec3(-0.48,-0.02,0.),0.07);
+  float armR=sdCap(q,vec3(0.26,0.42,0.),vec3(0.48,-0.02,0.),0.07);
+  // gambe
+  float legL=sdCap(q,vec3(-0.1,-0.15,0.),vec3(-0.14,-0.88,0.),0.085);
+  float legR=sdCap(q,vec3(0.1,-0.15,0.),vec3(0.14,-0.88,0.),0.085);
+  d=smin(head,torso,0.1);
+  d=smin(d,armL,0.06);d=smin(d,armR,0.06);
+  d=smin(d,legL,0.08);d=smin(d,legR,0.08);
+  // drips che cadono
+  for(int i=0;i<8;i++){
+    float fi=float(i);
+    float dx=sin(fi*2.3+t*0.2)*0.4;
+    float dy=-0.5-fi*0.12-mod(t*0.3+fi*0.15,1.5);
+    float dr=0.025+sin(fi*1.7)*0.015;
+    d=min(d,sdSph(p-vec3(dx,dy,sin(fi*1.1)*0.15),dr));
+  }
+  // particelle organiche
+  for(int i=0;i<6;i++){
+    float fi=float(i);
+    float ang=fi/6.*TAU+t*0.2;
+    float r2=1.5+sin(fi*1.3+t*0.5)*0.4;
+    float fy=cos(fi*0.9+t*0.3)*0.8;
+    d=min(d,sdSph(p-vec3(cos(ang)*r2,fy,sin(ang)*r2),0.04+sin(fi+t)*0.02));
+  }
+  return d;
+}
+
+// SCENE 5: ASTRONAUTA — tuta, visiera, spazio
+float scene_astro(vec3 p,float t){
+  float d=1e10;
+  float breathe=sin(t*0.9)*0.008;
+  vec3 q=p;
+  // casco
+  float helmet=sdSph(q-vec3(0.,0.68,0.),0.32+breathe);
+  float visor=sdSph(q-vec3(0.,0.65,0.16),0.24);
+  float helmetD=helmet;
+  helmetD=max(helmetD,-(visor-0.018));
+  // tuta
+  float torso=sdBox(q-vec3(0.,0.08,0.),vec3(0.3,0.38,0.22));
+  float tR=sdSph(q-vec3(0.,0.12,0.),0.33+breathe);
+  float chest=smax(torso,tR-0.01,0.04);
+  // zaino life support
+  float pack=sdBox(q-vec3(0.,0.08,-0.28),vec3(0.22,0.3,0.09));
+  // braccia
+  float armL=sdCyl(rotZ(q-vec3(-0.44,0.12,0.),0.4),0.1,0.3);
+  float armR=sdCyl(rotZ(q-vec3(0.44,0.12,0.),-0.4),0.1,0.3);
+  float glovL=sdSph(q-vec3(-0.54,-0.18,0.),0.12);
+  float glovR=sdSph(q-vec3(0.54,-0.18,0.),0.12);
+  float legL=sdCyl(q-vec3(-0.14,-0.55,0.),0.12,0.3);
+  float legR=sdCyl(q-vec3(0.14,-0.55,0.),0.12,0.3);
+  float bootL=sdBox(q-vec3(-0.14,-0.92,0.04),vec3(0.13,0.07,0.17));
+  float bootR=sdBox(q-vec3(0.14,-0.92,0.04),vec3(0.13,0.07,0.17));
+  d=helmetD;
+  d=smin(d,chest,0.08);d=smin(d,pack,0.04);
+  d=smin(d,armL,0.05);d=smin(d,armR,0.05);
+  d=smin(d,glovL,0.04);d=smin(d,glovR,0.04);
+  d=smin(d,legL,0.06);d=smin(d,legR,0.06);
+  d=smin(d,bootL,0.03);d=smin(d,bootR,0.03);
+  // stelle/detriti orbitanti
+  for(int i=0;i<10;i++){
+    float fi=float(i);
+    float ang=fi/10.*TAU+t*(0.2+fi*0.03);
+    float r2=1.8+sin(fi*1.7+t*0.4)*0.4;
+    float fy=sin(fi*0.9+t*0.25)*1.0;
+    float sr=0.015+fi*0.01;
+    d=min(d,sdSph(p-vec3(cos(ang)*r2,fy,sin(ang)*r2),sr));
+  }
+  return d;
+}
+
+// DISPATCHER SCENE
+float getScene(vec3 p,float sid,float t){
+  int s=int(sid+.5);
+  if(s==0) return scene_war(p,t);
+  if(s==1) return scene_politics(p,t);
+  if(s==2) return scene_tech(p,t);
+  if(s==3) return scene_culture(p,t);
+  if(s==4) return scene_human(p,t);
+  return scene_astro(p,t);
+}
+
+// SCENA PAVIMENTO + OGGETTO
+vec3 map(vec3 p,float sid,float t){
+  float dObj=getScene(p,sid,t);
+  // noise sul pavimento
+  float dFloor=p.y+1.05+fbm(p.xz*3.)*0.04;
+  // sfere ambiente — sempre presenti
+  float amb=1e10;
+  for(int i=0;i<5;i++){
+    float fi=float(i);
+    vec3 ap=rep(p-vec3(fi*0.7,0.,0.),vec3(3.5,3.5,3.5));
+    ap=rotY(rotX(ap,t*(0.1+fi*0.04)),t*(0.08+fi*0.03));
+    amb=min(amb,sdSph(ap,0.06+fi*0.02));
+  }
+  float d=min(dObj,amb);
+  if(d<dFloor) return vec3(d,1.,0.);
+  return vec3(dFloor,2.,0.);
+}
+
+vec3 normal(vec3 p,float sid,float t){
+  vec2 e=vec2(.001,0.);
+  return normalize(vec3(
+    map(p+e.xyy,sid,t).x-map(p-e.xyy,sid,t).x,
+    map(p+e.yxy,sid,t).x-map(p-e.yxy,sid,t).x,
+    map(p+e.yyx,sid,t).x-map(p-e.yyx,sid,t).x));
+}
+
+float shadow(vec3 ro,vec3 rd,float sid,float t){
+  float r=1.;float tt=0.02;
+  for(int i=0;i<28;i++){
+    float h=map(ro+rd*tt,sid,t).x;
+    if(h<.001) return 0.;
+    r=min(r,10.*h/tt);tt+=h;
+    if(tt>5.) break;
+  }
+  return clamp(r,0.,1.);
+}
+
+float ao(vec3 p,vec3 n,float sid,float t){
+  float o=0.,s=1.;
+  for(int i=0;i<6;i++){float h=.01+.15*float(i)/5.;o+=(h-map(p+h*n,sid,t).x)*s;s*=.92;}
+  return clamp(1.-2.5*o,0.,1.);
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy/res-.5)*vec2(1.,res.y/res.x)*2.;
+
+  // colore corrente con morph fluido
+  vec3 curCol=mix(c1,c2,smoothstep(0.,1.,morph));
+  vec3 accentCol=c3;
+
+  // camera orbitante
+  float camT=time*0.18;
+  vec3 ro=vec3(sin(camT)*0.6,0.4+sin(time*0.11)*0.2,3.0+sin(time*0.07)*0.3);
+  vec3 ta=vec3(0.,0.1,0.);
+  vec3 ww=normalize(ta-ro);
+  vec3 uu=normalize(cross(ww,vec3(0,1,0)));
+  vec3 vv=cross(uu,ww);
+  vec3 rd=normalize(uv.x*uu+uv.y*vv+1.75*ww);
+
+  // CIELO — gradiente atmosferico ricco
+  vec3 sunDir=normalize(vec3(1.0,0.6,-0.8));
+  vec3 sunCol=mix(curCol*2.+.3,vec3(1.,.95,.8),.3);
+  float sk=max(0.,rd.y);
+  vec3 skyBase=mix(curCol*.08,curCol*.02+vec3(.01,.01,.02),.6);
+  vec3 sky=mix(skyBase,mix(skyBase,vec3(.08,.12,.22),.5),pow(sk,.4));
+  // corona solare
+  sky+=sunCol*pow(max(0.,dot(rd,sunDir)),24.)*.7;
+  sky+=sunCol*pow(max(0.,dot(rd,sunDir)),256.)*4.;
+  // nebula procedurale
+  vec2 nUV=uv*1.5+time*0.02;
+  float neb=fbm(nUV)*0.5+fbm(nUV*2.1+1.7)*0.25;
+  sky+=curCol*neb*.12;
+  sky+=accentCol*fbm(nUV*3.+2.3)*.06;
+
+  vec3 finalCol=sky;
+
+  // RAYMARCHING
+  float t2=0.;vec3 hit=vec3(0.);bool found=false;
+  for(int i=0;i<110;i++){
+    vec3 p=ro+rd*t2;
+    hit=map(p,scene_id,time);
+    if(hit.x<.001){found=true;break;}
+    if(t2>12.) break;
+    t2+=hit.x*.85;
+  }
+
+  if(found){
+    vec3 p=ro+rd*t2;
+    vec3 n=normal(p,scene_id,time);
+    float sd=shadow(p+n*.002,sunDir,scene_id,time);
+    float occ=ao(p,n,scene_id,time);
+    float diff=max(0.,dot(n,sunDir));
+    float skyd=max(0.,dot(n,vec3(0,1,0)))*.45;
+    vec3 hal=normalize(sunDir-rd);
+    float spec=pow(max(0.,dot(n,hal)),90.);
+    float fres=pow(1.-max(0.,dot(-rd,n)),4.);
+    float ggx=pow(max(0.,dot(n,hal)),32.); // GGX approx
+
+    vec3 matCol;
+    float isFloor=step(1.5,hit.y);
+
+    if(isFloor<.5){
+      // OGGETTO — materiale procedurale ricco
+      float tex=fbm(vec2(atan(p.x,p.z)*5.,p.y*7.+time*.04));
+      float tex2=fbm(vec2(p.x*4.+time*.02,p.y*6.));
+      vec3 vc=mix(curCol*.55,curCol,tex);
+      vc=mix(vc,accentCol*.7,tex2*.3);
+      // venature scure
+      float vein=smoothstep(.3,.7,fbm(vec2(atan(p.x,p.z)*9.,p.y*12.)));
+      vc=mix(vc,vc*.15,vein*.45);
+      // curvatura — zone scure nelle rientranze
+      float curv=clamp(dot(n,normalize(vec3(p.x,0.,p.z)))*.5+.5,0.,1.);
+      vc=mix(vc*.28,vc,pow(curv,.6));
+
+      // LIGHTING MULTIPLO
+      vec3 skyLightCol=mix(vec3(.2,.3,.5),curCol*.3,.4);
+      matCol=vc*(
+        diff*sd*sunCol*2.4+          // sole principale
+        skyd*skyLightCol*occ*1.2+    // cielo
+        curCol*.1*occ+               // rimbalzo colore
+        .03                          // ambient minimo
+      );
+      matCol+=sunCol*spec*sd*.9;      // specular sole
+      matCol+=curCol*ggx*sd*.5;       // GGX
+      matCol+=skyLightCol*fres*.22;   // Fresnel cielo
+      matCol+=curCol*fres*.18;        // Fresnel colore
+
+      // effetti speciali per tipo
+      if(scene_id<.5){ // WAR — vene calde
+        float v=fbm(p.xz*6.+time*.3)*fbm(p.xy*4.)*2.;
+        matCol=mix(matCol,accentCol*3.,v*.2*tension);
+      }
+      if(scene_id>1.5&&scene_id<2.5){ // TECH — fresnel metallico
+        matCol=mix(matCol,curCol*3.,pow(fres,2.)*.6);
+      }
+    } else {
+      // PAVIMENTO — materiale ricco
+      float asp=fbm(p.xz*4.)*.5+.5;
+      float asp2=fbm(p.xz*12.)*.5+.5;
+      vec3 rc=mix(vec3(.07,.07,.08),vec3(.16,.15,.14),asp);
+      rc=mix(rc,vec3(.1,.1,.11),asp2*.3);
+      // crepe
+      float crack=smoothstep(.44,.5,fbm(p.xz*1.8));
+      rc=mix(rc,vec3(.03,.03,.04),crack*.6);
+      // micro texture
+      rc+=fbm(p.xz*20.)*.025;
+
+      float skyLt=max(0.,dot(n,vec3(0,1,0)))*.5;
+      matCol=rc*(diff*sd*sunCol*1.3+skyLt*vec3(.2,.3,.5)*occ+.04);
+      // rifesso wet
+      float wet=exp(-length(p.xz)*1.6)*.28;
+      float wetSpec=pow(max(0.,dot(reflect(rd,n),sunDir)),64.)*sd;
+      matCol+=curCol*wet*.6;
+      matCol+=sunCol*wetSpec*wet*.8;
+      matCol+=sunCol*spec*sd*.12;
+    }
+
+    // ALONE colorato drammatico
+    float rim=1.-max(0.,dot(n,normalize(ro-p)));
+    rim=pow(rim,2.5);
+    matCol+=curCol*rim*.7;
+    matCol+=accentCol*pow(rim,4.)*.4;
+
+    // FOG atmosferico con colore
+    float fog=1.-exp(-t2*.055);
+    float fog2=1.-exp(-t2*.02);
+    finalCol=mix(matCol,sky,fog);
+    finalCol=mix(finalCol,curCol*.15+sky,fog2*.3);
+
+    // profondita campo
+    float dof=smoothstep(5.,10.,t2)*.2;
+    finalCol=mix(finalCol,sky,dof);
+  }
+
+  // post process
+  // grain cinematico
+  vec2 gUV=gl_FragCoord.xy/res;
+  float gr=(hash(gUV+fract(time))-.5)*.032;
+  finalCol+=vec3(gr);
+
+  // aberrazione cromatica leggera
+  float aberr=length(uv)*.003;
+  finalCol.r+=aberr;finalCol.b-=aberr;
+
+  // vignette morbida
+  float vig=1.-smoothstep(.45,1.5,length(uv*vec2(.75,.95)));
+  finalCol*=vig*.9+.1;
+
+  // bloom simulato — alone luminoso
+  float bloom=max(0.,dot(finalCol,vec3(.3,.6,.1))-0.6);
+  finalCol+=curCol*bloom*.4;
+
+  // ACES tonemapping
+  finalCol=clamp(finalCol,0.,10.);
+  finalCol=finalCol*(2.51*finalCol+.03)/(finalCol*(2.43*finalCol+.59)+.14);
+  finalCol=pow(clamp(finalCol,0.,1.),vec3(.4545));
+
+  gl_FragColor=vec4(finalCol,1.);
+}
+`;
+
+function shdr(t,s){
+  const x=gl.createShader(t);
+  gl.shaderSource(x,s);gl.compileShader(x);
+  if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(x));
+  return x;
+}
+const prog=gl.createProgram();
+gl.attachShader(prog,shdr(gl.VERTEX_SHADER,VS));
+gl.attachShader(prog,shdr(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const pl=gl.getAttribLocation(prog,'p');
+gl.enableVertexAttribArray(pl);gl.vertexAttribPointer(pl,2,gl.FLOAT,false,0,0);
+
+const U={
+  res:gl.getUniformLocation(prog,'res'),
+  time:gl.getUniformLocation(prog,'time'),
+  sid:gl.getUniformLocation(prog,'scene_id'),
+  c1:gl.getUniformLocation(prog,'c1'),
+  c2:gl.getUniformLocation(prog,'c2'),
+  c3:gl.getUniformLocation(prog,'c3'),
+  morph:gl.getUniformLocation(prog,'morph'),
+  tension:gl.getUniformLocation(prog,'tension'),
+  chaos:gl.getUniformLocation(prog,'chaos'),
+};
+gl.uniform2f(U.res,W,H);
+
+const SIGNALS=[
+  {t:'2026 IRAN WAR',         cat:'WAR',     sid:0, c1:[.95,.04,.01], c2:[.8,.02,.01],  c3:[1.,.3,.0],  v:.95, headline:'CEASEFIRE DEAL GIVES TRUMP\nA WAY OUT OF WAR'},
+  {t:'TRUMP THREATS',         cat:'WAR',     sid:0, c1:[.88,.03,.01], c2:[.7,.02,.01],  c3:[1.,.5,.0],  v:.88, headline:'WHAT WE KNOW ABOUT THE\nUS-IRAN CEASEFIRE PLAN'},
+  {t:'F-35 GOT HIT',          cat:'WAR',     sid:0, c1:[.75,.03,.01], c2:[.6,.02,.01],  c3:[.9,.2,.0],  v:.82, headline:'OIL PRICES PLUNGE\nAS SHARES JUMP'},
+  {t:'DONALD TRUMP',          cat:'POLITICS',sid:1, c1:[.88,.68,.0],  c2:[.7,.5,.0],   c3:[1.,.85,.2], v:.85, headline:'TRUMP-BACKED REPUBLICAN\nWINS MTG ELECTION'},
+  {t:'IRAN NEGOTIATIONS',     cat:'POLITICS',sid:1, c1:[.5,.03,.92],  c2:[.38,.02,.7], c3:[.8,.2,1.],  v:.78, headline:'IRAN CEASEFIRE DEAL:\nHIGH COST FOR BOTH SIDES'},
+  {t:'TUCKER CARLSON',        cat:'POLITICS',sid:1, c1:[.42,.03,.8],  c2:[.3,.02,.6],  c3:[.7,.1,.9],  v:.65, headline:'POLITICAL TENSIONS\nRISE GLOBALLY'},
+  {t:'ARTEMIS II',            cat:'TECH',    sid:2, c1:[.0,.72,1.],   c2:[.0,.55,.85], c3:[.2,.9,1.],  v:.70, headline:'ARTEMIS II CREW\nLUNAR FLYBY MISSION'},
+  {t:'MEGATRAIN LLMs',        cat:'TECH',    sid:2, c1:[.0,.62,.95],  c2:[.0,.45,.8],  c3:[.1,.8,1.],  v:.68, headline:'TRAINING NEXT GEN AI\nON MASSIVE DATASETS'},
+  {t:'WRESTLEMANIA 42',       cat:'CULTURE', sid:3, c1:[1.,.62,.0],   c2:[.85,.45,.0], c3:[1.,.9,.1],  v:.60, headline:'WRESTLEMANIA 42\nBREAKS ALL RECORDS'},
+  {t:'KANYE WEST BANNED',     cat:'CULTURE', sid:3, c1:[.98,.52,.0],  c2:[.8,.38,.0],  c3:[1.,.7,.0],  v:.65, headline:'WIRELESS FESTIVAL CANCELLED\nKANYE BLOCKED FROM UK'},
+  {t:'DEATHS IN 2026',        cat:'HUMAN',   sid:4, c1:[.0,.82,.38],  c2:[.0,.62,.28], c3:[.2,1.,.5],  v:.75, headline:'SAWYER SWEETEN\nDEATHS OF 2026'},
+  {t:'CHRISTINA KOCH',        cat:'HUMAN',   sid:5, c1:[.0,.72,.32],  c2:[.0,.55,.24], c3:[.1,.9,.4],  v:.68, headline:'CHRISTINA KOCH ARTEMIS II\nFIRST WOMAN TO LUNAR ORBIT'},
+];
+
+let idx=0,timer=0,t=0;
+const DUR=5.0;
+
+function hexC(arr){return `rgb(${Math.round(arr[0]*255)},${Math.round(arr[1]*255)},${Math.round(arr[2]*255)})`;}
+
+function updateHUD(sig,next,mt){
+  const hx=hexC(sig.c1);
+  document.getElementById('sig').style.color=hx;
+  document.getElementById('sig').innerHTML=
+    `NOISE — 04/07/2026<br>${sig.cat} · ${Math.round(sig.v*100)}%<br>TENSION: CRITICAL`;
+  document.getElementById('headline').style.color=hx;
+  document.getElementById('headline').innerHTML=sig.headline.replace('\n','<br>');
+  document.getElementById('tfill').style.cssText=`background:${hx};width:${mt*100}%;height:1px`;
+}
+
+(function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;timer+=0.016;
+  if(timer>=DUR){timer=0;idx=(idx+1)%SIGNALS.length;}
+  const mt=timer/DUR;
+  const sig=SIGNALS[idx];
+  const next=SIGNALS[(idx+1)%SIGNALS.length];
+  updateHUD(sig,next,mt);
+
+  // morph fluido nell'ultimo 30%
+  const morphT=mt<0.7?0.:((mt-0.7)/0.3);
+
+  gl.uniform1f(U.time,t);
+  gl.uniform1f(U.sid,sig.sid);
+  gl.uniform3fv(U.c1,sig.c1);
+  gl.uniform3fv(U.c2,next.c1);
+  gl.uniform3fv(U.c3,sig.c3);
+  gl.uniform1f(U.morph,morphT);
+  gl.uniform1f(U.tension,sig.v);
+  gl.uniform1f(U.chaos,0.5+sig.v*0.5);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+})();
+</script>
+</body>
+</html>

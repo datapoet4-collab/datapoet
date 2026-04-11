@@ -28,20 +28,20 @@ button:hover{background:#222;color:#eee}
 </head>
 <body>
 <h1>DATA POET</h1>
-<div id="clima">High global tension. The world burns.</div>
+<div id="clima">Moderate tension. Unstable equilibrium.</div>
 <div id="markets-bar">
   <span class="market-item" style="color:#0044cc">S&P 500 ▲ 0.11%</span><span class="market-item" style="color:#0044cc">FTSE ▲ 0.69%</span>
 </div>
 <div id="metals-bar">
-  <span style="color:#cc9900">Gold $4824.6 ▲ 3.60%</span>
+  <span style="color:#cc9900">Gold $4741.6 ▼ 0.17%</span>
   &nbsp;|&nbsp;
   <span style="color:#3388ff">ETH $<span id="eth-price">--</span> <span id="eth-bull"></span></span> &nbsp;
   <span style="color:#ff8800">BTC $<span id="btc-price">--</span> <span id="btc-bull"></span></span> &nbsp;
-  <span style="color:#888">Silver $77.11 ▲ 7.36%</span>
+  <span style="color:#888">Silver $73.91 ▼ 1.75%</span>
 </div>
 <div id="news-bar">
   <div class="news-title">Today's headlines</div>
-  <div class="news-item">• Iran ceasefire deal gives Trump a way out of war - but at a high cost</div><div class="news-item">• What we know about the two-week ceasefire between the US and Iran</div><div class="news-item">• Trump-backed Republican Clay Fuller wins election to replace Marjorie Taylor Greene</div><div class="news-item">• Oil prices plunge and shares jump on US-Iran ceasefire plan</div><div class="news-item">• Wireless Festival cancelled after Kanye West blocked from coming to UK</div></div><div _del="1"></div>
+  <div class="news-item">• Trump criticises Nato as alliance chief describes meeting as 'very frank'</div><div class="news-item">• Iran ceasefire deal gives Trump a way out of war - but at a high cost</div><div class="news-item">• What we know about the two-week ceasefire between the US and Iran</div><div class="news-item">• At least 182 killed across Lebanon in large wave of Israeli strikes</div><div class="news-item">• He's Australia's most decorated soldier. Now he's at the centre of a historic war crimes case</div></div><div _del="1"></div>
   <div class="entity-bar">
     </div>
 </div>
@@ -52,8 +52,6 @@ button:hover{background:#222;color:#eee}
   
   <button id="btn-refresh" onclick="nextShape()">NEXT SHAPE</button>
   <button onclick="nextColor()">NEXT COLOR</button>
-  <button onclick="scarica()" id="btn-download" style="display:none">⬇ DOWNLOAD</button>
-
   
 </div>
 <div id="status"></div>
@@ -74,21 +72,21 @@ button:hover{background:#222;color:#eee}
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-const SIG={war:14,crisis:3,economy:3,politics:9,human:5,tech:2};
+const SIG={war:10,crisis:3,economy:3,politics:10,human:5,tech:3};
 const MARKETS={"markets":[{"name":"S&P 500","price":6583,"change":0.11},{"name":"Nikkei","price":53123,"change":1.26},{"name":"FTSE","price":10436,"change":0.69}],"avgChange":0.69,"isUp":true};
-const METALS=[{"name":"Gold","price":4824.6,"change":3.6},{"name":"Silver","price":77.11,"change":7.36}];
-const ENTITIES=[{"name":"Trump","type":"face","label":"Trump"},{"name":"Gaza","type":"place","label":"Gaza"},{"name":"Iran","type":"place","label":"Iran"},{"name":"Medio Oriente","type":"place","label":"Middle East"},{"name":"mitra","type":"gun","label":"Weapons"},{"name":"Petrolio","type":"oil","label":"Oil"},{"name":"gold","type":"gold","label":"Gold"},{"name":"silver","type":"silver","label":"Silver"}];
+const METALS=[{"name":"Gold","price":4741.6,"change":-0.17},{"name":"Silver","price":73.91,"change":-1.75}];
+const ENTITIES=[{"name":"Trump","type":"face","label":"Trump"},{"name":"Ukraine","type":"place","label":"Ukraine"},{"name":"Russia","type":"place","label":"Russia"},{"name":"Iran","type":"place","label":"Iran"},{"name":"Medio Oriente","type":"place","label":"Middle East"},{"name":"nave","type":"ship","label":"Warship"},{"name":"gold","type":"gold","label":"Gold"},{"name":"silver","type":"silver","label":"Silver"},{"name":"pharma","type":"pharma","label":"Medical Breakthrough"}];
 const IS_UP=true;
 const ETH_I=0.334;
 const N_ETH=11;
 const N_BTC=36;
-const ETH_BULL=true;
-const BTC_BULL=true;
-const ETH_PRICE_VAL=2259;
-const BTC_PRICE_VAL=71837;
-const DAILY_DATE='2026-04-08';
+const ETH_BULL=false;
+const BTC_BULL=false;
+const ETH_PRICE_VAL=2188;
+const BTC_PRICE_VAL=71040;
+const DAILY_DATE='2026-04-11';
 const N_GOLD=20;
-const N_SILVER=19;
+const N_SILVER=18;
 const HAS_PHARMA=true;
 const HAS_SHIP=true;
 const HAS_DRONE=true;
@@ -97,7 +95,7 @@ const HAS_BOMB=true;
 const HAS_PLANE=true;
 const HAS_SAT=true;
 const HAS_BUTTERFLY=(SIG.war===0&&SIG.crisis===0);
-const HAS_ROCKET=false;
+const HAS_ROCKET=true;
 
 // ── 5 PALETTE NFT ──────────────────────────────────────────────────────────
 const PALS=[
@@ -145,6 +143,7 @@ const SHAPES=[
   {name:'OCTA',    core:r=>new THREE.OctahedronGeometry(r*1.18,2),   blob:r=>new THREE.OctahedronGeometry(r,0), blobDist:1.2},
   {name:'TORUS',   core:r=>new THREE.TorusGeometry(r*0.9,r*0.38,32,64), blob:r=>new THREE.SphereGeometry(r,10,8), blobDist:1.1},
   {name:'ICOSA',   core:r=>new THREE.IcosahedronGeometry(r*1.1,2),   blob:r=>new THREE.IcosahedronGeometry(r,0),blobDist:1.2},
+,
   {name:'ZEBRA',rare:true,core:r=>new THREE.SphereGeometry(r,64,48),coremat:()=>{const cv=document.createElement('canvas');cv.width=1024;cv.height=1024;const ctx=cv.getContext('2d');const g=ctx.createLinearGradient(0,0,1024,1024);g.addColorStop(0,'#aaaaaa');g.addColorStop(.5,'#777777');g.addColorStop(1,'#999999');ctx.fillStyle=g;ctx.fillRect(0,0,1024,1024);for(let i=0;i<80;i++){const xb=i*(1024/80),w=4+Math.random()*9;ctx.strokeStyle='#7700ee';ctx.lineWidth=w;ctx.lineCap='round';ctx.beginPath();let y=0;ctx.moveTo(xb+(Math.random()-.5)*6,0);while(y<1024){const s=15+Math.random()*20;y+=s;ctx.lineTo(xb+(Math.random()-.5)*8,y);}ctx.globalAlpha=Math.random()<.15?0:(.5+Math.random()*.5);ctx.stroke();}ctx.globalAlpha=1;return new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(cv),roughness:.2,metalness:.05,color:0xdddddd});},blob:r=>new THREE.SphereGeometry(r,12,8),blobDist:0.65,blobmat:()=>new THREE.MeshStandardMaterial({color:0x5500aa,roughness:.1,metalness:.05,emissive:0x330066,emissiveIntensity:.4})},
   {name:'ESAGONO',rare:true,core:r=>new THREE.IcosahedronGeometry(r,3),coremat:()=>new THREE.MeshStandardMaterial({color:0xffffff,roughness:.3,metalness:.05}),blob:r=>new THREE.SphereGeometry(r,10,8),blobDist:0.5,blobmat:()=>new THREE.MeshStandardMaterial({color:0x00aaff,emissive:0x0066aa,emissiveIntensity:.5,roughness:.15}),extraBuild:(base,r)=>{const pm=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.15,metalness:.3});for(let i=0;i<400;i++){const phi=Math.acos(1-2*(i+.5)/400),theta=Math.PI*(1+Math.sqrt(5))*i;const nx=Math.sin(phi)*Math.cos(theta),ny=Math.cos(phi),nz=Math.sin(phi)*Math.sin(theta);const len=.12+Math.random()*.22,br=.04+Math.random()*.03;const c=new THREE.Mesh(new THREE.ConeGeometry(br,len,6),pm);c.position.set(nx*(r+len/2),ny*(r+len/2),nz*(r+len/2));c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(nx,ny,nz));base.add(c);}}},
   {name:'PENNELLATE',rare:true,core:r=>new THREE.SphereGeometry(r,64,48),coremat:()=>{const cv=document.createElement('canvas');cv.width=1024;cv.height=1024;const ctx=cv.getContext('2d');ctx.fillStyle='#111111';ctx.fillRect(0,0,1024,1024);ctx.lineCap='round';for(let i=0;i<18;i++){const cols=['#cc1400','#dd1500','#bb1200'];ctx.strokeStyle=cols[i%3];ctx.lineWidth=40+Math.random()*80;ctx.beginPath();ctx.moveTo(Math.random()*1024,Math.random()*1024);ctx.bezierCurveTo(Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024,Math.random()*1024);ctx.globalAlpha=.5+Math.random()*.5;if(Math.random()<.4)ctx.setLineDash([60+Math.random()*100,20+Math.random()*60]);else ctx.setLineDash([]);ctx.stroke();}ctx.globalAlpha=1;ctx.setLineDash([]);return new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(cv),roughness:.35,metalness:.05});},blob:r=>new THREE.SphereGeometry(r,10,8),blobDist:0.6,blobmat:()=>new THREE.MeshStandardMaterial({color:0xcc1400,emissive:0x880e00,emissiveIntensity:.5,roughness:.1})},
@@ -154,7 +153,7 @@ const SHAPES=[
 // Forma del giorno — deterministica dalla data
 const _today=new Date();
 const _dayHash=(_today.getFullYear()*366+(_today.getMonth()*31)+_today.getDate());
-const DAILY_SHAPE=SHAPES[_dayHash % SHAPES.length]||SHAPES[0];
+const DAILY_SHAPE=SHAPES[_dayHash % SHAPES.length];
 function choosePalette(){
   // Peso proporzionale — vince il segnale dominante con randomizzazione
   const weights=[
@@ -211,7 +210,7 @@ function buildScene(containerId,seed,pal,shapeOverride){
   while(container.firstChild)container.removeChild(container.firstChild);
   if(currentAnimCancel){currentAnimCancel();currentAnimCancel=null;}
 
-  const W=container.clientWidth||800;
+  const W=container.clientWidth;
   const H=Math.round(W*.6667);
   container.style.height=H+'px';
 
@@ -967,6 +966,5 @@ function scarica(){
   },500);
 }
 </script>
-<script>if(location.hostname==="localhost"||location.hostname==="127.0.0.1"){document.getElementById("btn-download").style.display="";}</script>
 </body>
 </html>

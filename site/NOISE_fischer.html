@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#f0ede8;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh;font-family:'Courier New',monospace}
+canvas{display:block}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#sig{position:absolute;top:22px;left:22px;font-size:8px;line-height:2.4;letter-spacing:3px;color:#111}
+#hl{position:absolute;bottom:100px;left:22px;right:22px;font-size:11px;letter-spacing:3px;line-height:1.9;text-transform:uppercase;color:#111}
+#date{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);font-size:7px;letter-spacing:4px;color:rgba(0,0,0,0.3)}
+#bar{position:absolute;bottom:60px;left:22px;right:22px;height:1px;background:rgba(0,0,0,0.08)}
+#fill{height:1px;background:#111}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="sig"></div>
+  <div id="hl"></div>
+  <div id="bar"><div id="fill"></div></div>
+  <div id="date">DATA POET · NOISE #001 · 04/07/2026</div>
+</div>
+<script>
+const W=450,H=800;
+const c=document.getElementById('c');
+c.width=W;c.height=H;
+const gl=c.getContext('webgl');
+const VS=`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+const FS=`
+precision mediump float;
+uniform vec2 res;
+uniform float time;
+uniform float sid;
+uniform vec3 c1;
+uniform vec3 c2;
+uniform vec3 c3;
+uniform float morph;
+uniform float tension;
+
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+float hash1(float n){return fract(sin(n)*43758.5);}
+float noise(vec2 p){vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.;float a=.5;for(int i=0;i<4;i++){v+=a*noise(p);p*=2.1;a*=.5;}return v;}
+float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+float sdSph(vec3 p,float r){return length(p)-r;}
+float sdBox(vec3 p,vec3 b){vec3 d=abs(p)-b;return length(max(d,0.))+min(max(d.x,max(d.y,d.z)),0.);}
+float sdCyl(vec3 p,float r,float h){vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.));}
+float sdTor(vec3 p,float R,float r){return length(vec2(length(p.xz)-R,p.y))-r;}
+float sdCap(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a;vec3 ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h)-r;}
+vec3 rX(vec3 p,float a){float c=cos(a);float s=sin(a);return vec3(p.x,c*p.y-s*p.z,s*p.y+c*p.z);}
+vec3 rY(vec3 p,float a){float c=cos(a);float s=sin(a);return vec3(c*p.x+s*p.z,p.y,-s*p.x+c*p.z);}
+vec3 rZ(vec3 p,float a){float c=cos(a);float s=sin(a);return vec3(c*p.x-s*p.y,s*p.x+c*p.y,p.z);}
+
+float candle(vec3 p, float t, float sc){
+  p /= sc;
+  float body = sdCyl(p, 0.1, 0.5);
+  float wick = sdCap(p, vec3(0.,0.5,0.), vec3(sin(t)*0.01,0.58,0.), 0.006);
+  float flame = sdSph(p-vec3(sin(t*2.)*0.015,0.64,0.), 0.045);
+  float drip = 1e9;
+  for(int i=0;i<6;i++){
+    float fi=float(i);
+    float ang=fi/6.*6.2832+fi*0.8;
+    float dx=cos(ang)*0.07; float dz=sin(ang)*0.07;
+    float dl=0.06+hash1(fi*3.)*0.2+sin(t*0.4+fi)*0.04;
+    drip=min(drip,sdCap(p,vec3(dx,0.48,dz),vec3(dx+sin(fi)*0.02,0.48-dl,dz),0.02));
+    drip=min(drip,sdSph(p-vec3(dx+sin(fi)*0.02,0.48-dl-0.02,dz),0.025));
+  }
+  float d=smin(body,drip,0.012);
+  d=smin(d,wick,0.005);
+  d=smin(d,flame,0.025);
+  return d*sc;
+}
+
+float missile(vec3 p, float t){
+  vec3 q=rZ(rY(p,0.3+sin(t*0.2)*0.15),sin(t*0.15)*0.2);
+  float body=sdCyl(q,0.07,0.75);
+  float body2=sdCyl(q,0.07,0.75);
+  float tip=length(q-vec3(0.,0.75,0.))-0.07;
+  tip=max(tip,-(q.y-0.75));
+  float fin1=sdBox(q-vec3(0.,-0.5,0.),vec3(0.2,0.09,0.01));
+  float fin2=sdBox(q-vec3(0.,-0.5,0.),vec3(0.01,0.09,0.2));
+  float noz=sdCyl(q-vec3(0.,-0.78,0.),0.06,0.06);
+  float d=smin(body,fin1,0.01);
+  d=smin(d,fin2,0.01);
+  d=smin(d,noz,0.02);
+  return d;
+}
+
+float bust(vec3 p, float t){
+  vec3 q=p;
+  float sx=q.x>0. ? 1.8 : 0.3;
+  q.x+=sin(p.y*5.+t*1.8)*0.04*sx;
+  float head=sdSph(q-vec3(0.,0.58,0.),0.3);
+  head+=sin(q.x*8.+t)*0.01+sin(q.y*6.+t*0.7)*0.008;
+  float neck=sdCyl(q-vec3(0.,0.12,0.),0.1,0.18);
+  float body=sdBox(q-vec3(0.,-0.1,0.),vec3(0.48,0.18,0.28));
+  body-=0.02;
+  float drip=1e9;
+  for(int i=0;i<5;i++){
+    float fi=float(i);
+    float ang=fi/5.*6.2832+fi*0.6;
+    float dx=cos(ang)*0.24; float dz=sin(ang)*0.24;
+    float dl=0.1+hash1(fi*4.)*0.28+sin(t*0.4+fi)*0.05;
+    drip=min(drip,sdCap(q,vec3(dx,0.56,dz),vec3(dx*0.8,0.56-dl,dz*0.8),0.025));
+    drip=min(drip,sdSph(q-vec3(dx*0.8,0.56-dl-0.02,dz*0.8),0.03));
+  }
+  float d=smin(smin(head,neck,0.07),body,0.1);
+  d=smin(d,drip,0.015);
+  return d;
+}
+
+float rocket(vec3 p, float t){
+  vec3 q=rZ(p,sin(t*0.12)*0.06);
+  float body=sdCyl(q,0.18,0.95);
+  float tL=sdCyl(q-vec3(-0.28,0.,0.),0.08,0.7);
+  float tR=sdCyl(q-vec3(0.28,0.,0.),0.08,0.7);
+  float n1=sdCyl(q-vec3(0.,-1.,0.),0.1,0.08);
+  float glitch=floor(sin(q.y*16.+t*4.)*4.)/4.*0.012;
+  float d=body+glitch;
+  d=smin(d,tL,0.02);
+  d=smin(d,tR,0.02);
+  d=smin(d,n1,0.02);
+  return d;
+}
+
+float micro(vec3 p, float t){
+  float pulse=sin(t*2.5)*0.5+0.5;
+  vec3 q=p;
+  float disp=sin(length(q)*5.-t*3.)*0.015*pulse;
+  float mh=sdSph(q-vec3(0.,0.48,0.),0.24+disp);
+  float ms=sdCyl(q,0.038,0.42);
+  float mb=sdTor(q-vec3(0.,-0.44,0.),0.18,0.038);
+  float cr=sdTor(q-vec3(0.,0.78,0.),0.18,0.025);
+  float d=mh;
+  d=smin(d,ms,0.03);
+  d=smin(d,mb,0.03);
+  d=min(d,cr);
+  for(int i=0;i<7;i++){
+    float fi=float(i);
+    float ang=fi/7.*6.2832;
+    float h=0.08+sin(fi*1.3)*0.04;
+    d=min(d,sdBox(p-vec3(cos(ang)*0.18,0.78+h,sin(ang)*0.18),vec3(0.025,h,0.025)));
+  }
+  return d;
+}
+
+float figure(vec3 p, float t){
+  vec3 q=p;
+  float melt=sin(t*0.5+p.x*2.5)*0.07*tension;
+  q.y-=max(0.,melt);
+  q+=vec3(sin(p.y*3.+t)*0.025,0.,0.)*tension;
+  float head=sdSph(q-vec3(0.,0.72,0.),0.2);
+  head+=sin(q.x*6.+t)*0.012;
+  float torso=sdBox(q-vec3(0.,0.18,0.),vec3(0.17,0.3,0.12));
+  float aL=sdCap(q,vec3(-0.2,0.35,0.),vec3(-0.38,-0.05,0.),0.065);
+  float aR=sdCap(q,vec3(0.2,0.35,0.),vec3(0.38,-0.05,0.),0.065);
+  float lL=sdCap(q,vec3(-0.09,-0.12,0.),vec3(-0.12,-0.82,0.),0.078);
+  float lR=sdCap(q,vec3(0.09,-0.12,0.),vec3(0.12,-0.82,0.),0.078);
+  float d=smin(head,torso,0.09);
+  d=smin(d,smin(aL,aR,0.05),0.06);
+  d=smin(d,smin(lL,lR,0.05),0.06);
+  for(int i=0;i<8;i++){
+    float fi=float(i);
+    float dy=-0.15-fi*0.11-mod(t*0.22+fi*0.12,1.1);
+    float dx=(hash1(fi*3.)-0.5)*0.35;
+    float dz=(hash1(fi*7.)-0.5)*0.25;
+    d=min(d,sdSph(p-vec3(dx,dy,dz),0.018+hash1(fi*11.)*0.012));
+  }
+  return d;
+}
+
+float astro(vec3 p, float t){
+  float br=sin(t*0.8)*0.007;
+  float helm=sdSph(p-vec3(0.,0.62,0.),0.28+br);
+  float vis=sdSph(p-vec3(0.,0.6,0.14),0.2);
+  float h=max(helm,-(vis-0.015));
+  float torso=sdBox(p-vec3(0.,0.06,0.),vec3(0.27,0.34,0.2));
+  float pk=sdBox(p-vec3(0.,0.06,-0.24),vec3(0.2,0.26,0.08));
+  float aL=sdCyl(rZ(p-vec3(-0.38,0.1,0.),0.35),0.085,0.26);
+  float aR=sdCyl(rZ(p-vec3(0.38,0.1,0.),-0.35),0.085,0.26);
+  float gL=sdSph(p-vec3(-0.48,-0.16,0.),0.1);
+  float gR=sdSph(p-vec3(0.48,-0.16,0.),0.1);
+  float lL=sdCyl(p-vec3(-0.12,-0.5,0.),0.1,0.26);
+  float lR=sdCyl(p-vec3(0.12,-0.5,0.),0.1,0.26);
+  float bL=sdBox(p-vec3(-0.12,-0.82,0.04),vec3(0.11,0.06,0.15));
+  float bR=sdBox(p-vec3(0.12,-0.82,0.04),vec3(0.11,0.06,0.15));
+  float d=h;
+  d=smin(d,torso,0.07);d=smin(d,pk,0.04);
+  d=smin(d,aL,0.04);d=smin(d,aR,0.04);
+  d=smin(d,gL,0.03);d=smin(d,gR,0.03);
+  d=smin(d,lL,0.05);d=smin(d,lR,0.05);
+  d=smin(d,bL,0.02);d=smin(d,bR,0.02);
+  return d;
+}
+
+vec2 map(vec3 p, float sc, float t){
+  float dO=1e9;
+  int s=int(sc+0.5);
+
+  if(s==0){
+    dO=missile(rY(p,t*0.18),t);
+    for(int i=0;i<4;i++){
+      float fi=float(i);
+      float ang=fi/4.*6.2832+t*0.1;
+      float r2=0.9+sin(fi*1.3)*0.2;
+      float fy=-0.35+sin(fi*0.7+t*0.3)*0.12;
+      float sc2=0.4+fi*0.12;
+      dO=smin(dO,candle(rY(p-vec3(cos(ang)*r2,fy,sin(ang)*r2),t*0.2+fi),t,sc2),0.04);
+    }
+  } else if(s==1){
+    dO=bust(rY(p,t*0.12),t);
+    for(int i=0;i<4;i++){
+      float fi=float(i);
+      float ang=fi/4.*6.2832+t*0.22;
+      float r2=1.4+sin(fi+t*0.3)*0.3;
+      dO=min(dO,sdSph(p-vec3(cos(ang)*r2,sin(fi*1.3+t*0.4)*0.5,sin(ang)*r2),0.08+fi*0.02));
+    }
+  } else if(s==2){
+    for(int i=0;i<3;i++){
+      float fi=float(i);
+      float ang=fi/3.*6.2832+t*0.08;
+      dO=smin(dO,missile(rY(p-vec3(cos(ang)*0.6,fi*0.4-0.4,sin(ang)*0.6),t*0.15+fi*2.),t),0.04);
+    }
+    for(int i=0;i<5;i++){
+      float fi=float(i);
+      float ang=fi/5.*6.2832+t*0.2;
+      float r2=1.5+sin(fi*2.+t*0.4)*0.4;
+      dO=min(dO,sdSph(p-vec3(cos(ang)*r2,sin(fi*1.7+t*0.5)*0.8,sin(ang)*r2),0.1+sin(t*2.+fi)*0.04));
+    }
+  } else if(s==3){
+    dO=bust(rY(p,sin(t*0.15)*0.25),t);
+    dO=min(dO,sdTor(rX(p-vec3(0.,0.58,0.),t*0.3),0.52,0.018));
+    dO=min(dO,sdTor(rZ(p-vec3(0.,0.58,0.),t*0.25),0.62,0.012));
+  } else if(s==4){
+    dO=bust(rY(p,t*0.1),t);
+    for(int i=0;i<6;i++){
+      float fi=float(i);
+      float ang=fi/6.*6.2832+t*0.3;
+      dO=min(dO,sdBox(rY(p-vec3(cos(ang)*1.5,sin(fi+t*0.3)*0.5,sin(ang)*1.5),t*0.4+fi),vec3(0.08)));
+    }
+  } else if(s==5){
+    dO=bust(rY(p,t*0.08),t);
+  } else if(s==6){
+    dO=rocket(rY(p,t*0.1),t);
+    for(int i=0;i<3;i++){
+      float fi=float(i);
+      float ang=fi/3.*6.2832+t*0.5;
+      float r2=1.6+fi*0.2;
+      vec3 sp=rY(p-vec3(cos(ang)*r2,sin(fi+t*0.3)*0.4,sin(ang)*r2),t*0.4);
+      float sb=sdBox(sp,vec3(0.1,0.05,0.05));
+      float pL=sdBox(sp-vec3(-0.2,0.,0.),vec3(0.08,0.18,0.008));
+      float pR=sdBox(sp-vec3(0.2,0.,0.),vec3(0.08,0.18,0.008));
+      dO=smin(dO,smin(sb,smin(pL,pR,0.008),0.008),0.008);
+    }
+  } else if(s==7){
+    dO=rocket(rY(p,t*0.08),t);
+    for(int i=0;i<12;i++){
+      float fi=float(i);
+      float ang=fi/12.*6.2832*1.618+t*0.25;
+      float r2=0.7+fi*0.12;
+      float ht=sin(fi*2.+t*0.4)*1.4;
+      dO=min(dO,sdSph(p-vec3(cos(ang)*r2,ht,sin(ang)*r2),0.02+fi*0.006));
+    }
+  } else if(s==8){
+    dO=micro(rY(p,t*0.15),t);
+    for(int i=0;i<6;i++){
+      float fi=float(i);
+      float ang=fi/6.*6.2832+t*0.6;
+      float r2=1.3+sin(fi+t*0.5)*0.3*(sin(t*2.)*0.5+0.5);
+      dO=min(dO,sdSph(p-vec3(cos(ang)*r2,sin(fi*0.9+t)*0.5,sin(ang)*r2),0.07+sin(t*3.+fi)*0.03));
+    }
+  } else if(s==9){
+    dO=micro(rY(p,sin(t*0.2)*0.3),t);
+  } else if(s==10){
+    dO=figure(p,t);
+  } else {
+    dO=astro(rY(p,t*0.08),t);
+    for(int i=0;i<8;i++){
+      float fi=float(i);
+      float ang=fi/8.*6.2832+t*0.15;
+      float r2=1.7+sin(fi*1.7+t*0.3)*0.4;
+      dO=min(dO,sdSph(p-vec3(cos(ang)*r2,sin(fi*0.9+t*0.2)*0.9,sin(ang)*r2),0.012+fi*0.008));
+    }
+  }
+
+  float dF=p.y+1.1+fbm(p.xz*1.8)*0.03;
+  if(dO<dF) return vec2(dO,1.);
+  return vec2(dF,2.);
+}
+
+vec3 nrm(vec3 p,float sc,float t){
+  vec2 e=vec2(0.002,0.);
+  return normalize(vec3(
+    map(p+e.xyy,sc,t).x-map(p-e.xyy,sc,t).x,
+    map(p+e.yxy,sc,t).x-map(p-e.yxy,sc,t).x,
+    map(p+e.yyx,sc,t).x-map(p-e.yyx,sc,t).x));
+}
+
+float shd(vec3 ro,vec3 rd,float sc,float t){
+  float r=1.;float tt=0.02;
+  for(int i=0;i<20;i++){
+    float h=map(ro+rd*tt,sc,t).x;
+    if(h<0.001) return 0.;
+    r=min(r,8.*h/tt);tt+=h;
+    if(tt>4.) break;
+  }
+  return r;
+}
+
+float occ(vec3 p,vec3 n,float sc,float t){
+  float o=0.;float s=1.;
+  for(int i=0;i<4;i++){
+    float h=0.01+0.12*float(i)/3.;
+    o+=(h-map(p+h*n,sc,t).x)*s;s*=0.92;
+  }
+  return clamp(1.-2.5*o,0.,1.);
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy/res-0.5)*vec2(1.,res.y/res.x)*2.;
+  vec3 cur=mix(c1,c2,morph);
+  vec3 bg=mix(vec3(0.97,0.95,0.92),vec3(0.93,0.91,0.88),uv.y*0.5+0.5);
+  bg=mix(bg,cur*0.15+vec3(0.85,0.83,0.8),0.12);
+
+  vec3 ro=vec3(sin(time*0.14)*0.45,0.35+sin(time*0.09)*0.12,3.2);
+  vec3 ta=vec3(0.,0.,0.);
+  vec3 ww=normalize(ta-ro);
+  vec3 uu=normalize(cross(ww,vec3(0,1,0)));
+  vec3 vv=cross(uu,ww);
+  vec3 rd=normalize(uv.x*uu+uv.y*vv+1.8*ww);
+
+  vec3 kL=normalize(vec3(2.,3.5,1.5));
+  vec3 fL=normalize(vec3(-1.5,2.,-1.));
+  vec3 kC=vec3(1.,1.,0.97)*1.9;
+  vec3 fC=vec3(0.6,0.68,0.9)*0.65;
+
+  vec3 finalCol=bg;
+  float t2=0.;
+  vec2 hit=vec2(0.);
+  bool found=false;
+  for(int i=0;i<80;i++){
+    vec3 pp=ro+rd*t2;
+    hit=map(pp,sid,time);
+    if(hit.x<0.001){found=true;break;}
+    if(t2>9.) break;
+    t2+=hit.x*0.9;
+  }
+
+  if(found){
+    vec3 pp=ro+rd*t2;
+    vec3 n=nrm(pp,sid,time);
+    float sd=shd(pp+n*0.002,kL,sid,time);
+    float ao=occ(pp,n,sid,time);
+    float diff=max(0.,dot(n,kL));
+    float diff2=max(0.,dot(n,fL))*0.5;
+    vec3 hal=normalize(kL-rd);
+    float spec=pow(max(0.,dot(n,hal)),100.);
+    float fres=pow(1.-max(0.,dot(-rd,n)),5.);
+    vec3 mat;
+
+    if(hit.y<1.5){
+      float tx=fbm(vec2(atan(pp.x,pp.z)*5.,pp.y*7.+time*0.03))*0.5+0.5;
+      vec3 vc=mix(cur*0.7,cur*1.2,tx);
+      vc=mix(vc,c3,fbm(vec2(pp.x*4.,pp.z*4.+time*0.02))*0.25);
+      float cv=clamp(dot(n,normalize(vec3(pp.x,0.,pp.z)))*0.5+0.5,0.,1.);
+      vc=mix(vc*0.45,vc,pow(cv,0.7));
+      float vein=smoothstep(0.32,0.68,fbm(vec2(atan(pp.x,pp.z)*8.,pp.y*11.)));
+      vc=mix(vc,vc*0.18,vein*0.4);
+      float sss=max(0.,dot(n,-kL))*0.4;
+      mat=vc*(diff*sd*kC*2.2+diff2*fC*ao+sss*kC*0.5+vec3(0.88,0.86,0.83)*0.1*ao);
+      mat+=kC*spec*sd*0.6;
+      mat+=cur*1.5*fres*0.2;
+      // fiamma per candele
+      if(sid<3.) mat+=vec3(1.,0.4,0.05)*max(0.,1.-length(pp-vec3(0.,0.64,0.))*8.)*0.8;
+    } else {
+      float asp=fbm(pp.xz*4.)*0.5+0.5;
+      vec3 rc=mix(vec3(0.9,0.88,0.85),vec3(0.95,0.93,0.9),asp);
+      mat=rc*(diff*sd*kC*0.7+diff2*fC*0.3*ao+vec3(0.88,0.86,0.83)*0.18*ao);
+      float wet=exp(-length(pp.xz)*1.5)*0.2;
+      mat+=cur*wet*0.8;
+      mat+=kC*spec*sd*0.08;
+    }
+
+    float rim=pow(1.-max(0.,dot(n,normalize(ro-pp))),3.);
+    mat+=cur*1.8*rim*0.45;
+    mat+=c3*rim*0.2;
+    float fog=1.-exp(-t2*0.015);
+    finalCol=mix(mat,bg,fog);
+  }
+
+  finalCol+=vec3((hash(gl_FragCoord.xy+time)-0.5)*0.016);
+  float vig=1.-smoothstep(0.45,1.4,length(uv*vec2(0.8,0.95)));
+  finalCol=mix(finalCol,bg*0.75,1.-vig);
+  finalCol=clamp(finalCol,0.,1.);
+  finalCol=pow(finalCol,vec3(0.45));
+  gl_FragColor=vec4(finalCol,1.);
+}
+`;
+
+function shdr(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(x));return x;}
+const prog=gl.createProgram();
+gl.attachShader(prog,shdr(gl.VERTEX_SHADER,VS));
+gl.attachShader(prog,shdr(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const pl=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(pl);gl.vertexAttribPointer(pl,2,gl.FLOAT,false,0,0);
+const U={res:gl.getUniformLocation(prog,'res'),time:gl.getUniformLocation(prog,'time'),sid:gl.getUniformLocation(prog,'sid'),c1:gl.getUniformLocation(prog,'c1'),c2:gl.getUniformLocation(prog,'c2'),c3:gl.getUniformLocation(prog,'c3'),morph:gl.getUniformLocation(prog,'morph'),tension:gl.getUniformLocation(prog,'tension')};
+gl.uniform2f(U.res,W,H);
+
+const S=[
+  {t:'2026 IRAN WAR',     cat:'WAR',     sid:0,  c1:[.98,.06,.02],c2:[.82,.03,.01],c3:[1.,.38,.05],v:.95,hl:'CEASEFIRE DEAL GIVES TRUMP\nA WAY OUT — AT HIGH COST'},
+  {t:'TRUMP THREATS',     cat:'WAR',     sid:1,  c1:[.92,.04,.01],c2:[.76,.03,.01],c3:[1.,.5,.08], v:.88,hl:'US-IRAN CEASEFIRE:\nWHAT WE KNOW'},
+  {t:'F-35 GOT HIT',      cat:'WAR',     sid:2,  c1:[.82,.04,.02],c2:[.65,.02,.01],c3:[.95,.22,.0],v:.82,hl:'OIL PRICES PLUNGE\nSHARES JUMP ON CEASEFIRE'},
+  {t:'DONALD TRUMP',      cat:'POLITICS',sid:3,  c1:[.92,.72,.0], c2:[.75,.55,.0], c3:[1.,.92,.25],v:.85,hl:'TRUMP-BACKED WINS\nMARJORIE TAYLOR GREENE SEAT'},
+  {t:'IRAN NEGOTIATIONS', cat:'POLITICS',sid:4,  c1:[.55,.04,.95],c2:[.42,.02,.75],c3:[.88,.22,1.],v:.78,hl:'IRAN DEAL:\nHIGH COST FOR BOTH SIDES'},
+  {t:'TUCKER CARLSON',    cat:'POLITICS',sid:5,  c1:[.48,.04,.85],c2:[.35,.02,.65],c3:[.75,.12,.95],v:.65,hl:'POLITICAL CHAOS\nGLOBAL TENSIONS RISE'},
+  {t:'ARTEMIS II',        cat:'TECH',    sid:6,  c1:[.0,.78,1.],  c2:[.0,.58,.88], c3:[.3,.98,1.], v:.70,hl:'ARTEMIS II CREW\nPREPARES LUNAR FLYBY'},
+  {t:'MEGATRAIN LLMs',    cat:'TECH',    sid:7,  c1:[.0,.68,.98], c2:[.0,.5,.82],  c3:[.18,.88,1.],v:.68,hl:'TRAINING NEXT GEN AI\nON MASSIVE SCALE'},
+  {t:'WRESTLEMANIA 42',   cat:'CULTURE', sid:8,  c1:[1.,.65,.0],  c2:[.88,.48,.0], c3:[1.,.92,.15],v:.60,hl:'WRESTLEMANIA 42\nSHATTERS ALL RECORDS'},
+  {t:'KANYE WEST BANNED', cat:'CULTURE', sid:9,  c1:[1.,.55,.0],  c2:[.85,.4,.0],  c3:[1.,.75,.05],v:.65,hl:'WIRELESS FESTIVAL CANCELLED\nKANYE BLOCKED FROM UK'},
+  {t:'DEATHS IN 2026',    cat:'HUMAN',   sid:10, c1:[.0,.88,.42], c2:[.0,.68,.3],  c3:[.28,1.,.58],v:.75,hl:'SAWYER SWEETEN\nDEATHS OF 2026'},
+  {t:'CHRISTINA KOCH',    cat:'HUMAN',   sid:11, c1:[.0,.78,.36], c2:[.0,.58,.26], c3:[.18,.95,.45],v:.68,hl:'CHRISTINA KOCH\nFIRST WOMAN TO LUNAR ORBIT'},
+];
+
+let idx=0,timer=0,t=0;const DUR=4.5;
+function hx(a){return `rgb(${Math.round(a[0]*255)},${Math.round(a[1]*255)},${Math.round(a[2]*255)})`;}
+function upd(sig,mt){
+  document.getElementById('sig').innerHTML=`NOISE — 04/07/2026<br>${sig.cat} · ${Math.round(sig.v*100)}%<br>TENSION: CRITICAL`;
+  document.getElementById('hl').innerHTML=sig.hl.replace('\n','<br>');
+  document.getElementById('fill').style.width=mt*100+'%';
+}
+(function frame(){
+  requestAnimationFrame(frame);t+=0.016;timer+=0.016;
+  if(timer>=DUR){timer=0;idx=(idx+1)%S.length;}
+  const mt=timer/DUR,sig=S[idx],next=S[(idx+1)%S.length];
+  upd(sig,mt);
+  gl.uniform1f(U.time,t);gl.uniform1f(U.sid,sig.sid);
+  gl.uniform3fv(U.c1,sig.c1);gl.uniform3fv(U.c2,next.c1);gl.uniform3fv(U.c3,sig.c3);
+  gl.uniform1f(U.morph,mt<0.7?0.:(mt-0.7)/0.3);
+  gl.uniform1f(U.tension,sig.v);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+})();
+</script>
+</body>
+</html>

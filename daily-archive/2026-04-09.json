@@ -1,0 +1,131 @@
+{
+  "entities": [
+    {
+      "name": "Trump",
+      "type": "face",
+      "label": "Trump"
+    },
+    {
+      "name": "Ukraine",
+      "type": "place",
+      "label": "Ukraine"
+    },
+    {
+      "name": "Russia",
+      "type": "place",
+      "label": "Russia"
+    },
+    {
+      "name": "Iran",
+      "type": "place",
+      "label": "Iran"
+    },
+    {
+      "name": "Medio Oriente",
+      "type": "place",
+      "label": "Middle East"
+    },
+    {
+      "name": "nave",
+      "type": "ship",
+      "label": "Warship"
+    },
+    {
+      "name": "gold",
+      "type": "gold",
+      "label": "Gold"
+    },
+    {
+      "name": "silver",
+      "type": "silver",
+      "label": "Silver"
+    },
+    {
+      "name": "pharma",
+      "type": "pharma",
+      "label": "Medical Breakthrough"
+    }
+  ],
+  "headlines": [
+    "Trump criticises Nato as alliance chief describes meeting as 'very frank'",
+    "Iran ceasefire deal gives Trump a way out of war - but at a high cost",
+    "What we know about the two-week ceasefire between the US and Iran",
+    "At least 182 killed across Lebanon in large wave of Israeli strikes",
+    "He's Australia's most decorated soldier. Now he's at the centre of a historic war crimes case",
+    "Prosecutors seek Tiger Woods' prescription drug records after Florida arrest",
+    "Greece to ban social media for under-15s from next year",
+    "Germany suspends military approval for long stays abroad for men under 45"
+  ],
+  "state": {
+    "speed": 0.03277777777777778,
+    "chaos": 0.9683098591549296,
+    "density": 0.3442879499217527,
+    "colorMode": 0.24999999999999997,
+    "pointSize": 0.014658841940532082,
+    "opacity": 0.5419405320813772
+  },
+  "clima": "Moderate tension. Unstable equilibrium.",
+  "opere": [
+    {
+      "nome": "Fracture",
+      "desc": "Work one. Moderate tension. Unstable equilibrium. Signals: conflict 10, crisis 3, economy 3."
+    },
+    {
+      "nome": "Detonation",
+      "desc": "Work two. Matter reacts. Politics 10, humanity 5."
+    },
+    {
+      "nome": "Collapse",
+      "desc": "Work three. Variation. Tech 3, total tension 38%."
+    }
+  ],
+  "signals": {
+    "war": 10,
+    "crisis": 3,
+    "economy": 3,
+    "politics": 10,
+    "human": 5,
+    "tech": 3
+  },
+  "markets": {
+    "markets": [
+      {
+        "name": "S&P 500",
+        "price": 0,
+        "change": -100
+      },
+      {
+        "name": "Nikkei",
+        "price": 55946,
+        "change": null
+      },
+      {
+        "name": "FTSE",
+        "price": 0,
+        "change": -100
+      }
+    ],
+    "avgChange": 0,
+    "isUp": true
+  },
+  "metals": [
+    {
+      "name": "Gold",
+      "price": 4741.6,
+      "change": -0.17
+    },
+    {
+      "name": "Silver",
+      "price": 73.91,
+      "change": -1.75
+    }
+  ],
+  "eth": {
+    "price": 2188,
+    "change24h": -2.33
+  },
+  "btc": {
+    "price": 71040,
+    "change24h": -0.91
+  }
+}

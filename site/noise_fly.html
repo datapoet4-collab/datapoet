@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<style>
+*{margin:0;padding:0}
+body{background:#000;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh;font-family:'Courier New',monospace}
+#loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff1400;font-size:11px;letter-spacing:3px;text-align:center;z-index:10}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#sig{position:absolute;top:16px;left:16px;font-size:8px;letter-spacing:3px;line-height:2.2}
+#hl{position:absolute;bottom:55px;left:16px;right:16px;font-size:10px;letter-spacing:3px;line-height:1.9;text-transform:uppercase;font-weight:bold}
+#bar{position:absolute;bottom:30px;left:16px;right:16px;height:1px;background:rgba(255,255,255,.06)}
+#fill{height:1px}
+#wm{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:6px;letter-spacing:4px;color:rgba(255,255,255,.15);white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="loading">NOISE — DATA POET<br><span id="ls">LOADING...</span></div>
+<div id="hud">
+  <div id="sig"></div>
+  <div id="hl"></div>
+  <div id="bar"><div id="fill"></div></div>
+  <div id="wm">DATA POET · NOISE · 09/04/2026</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+const W=450,H=800;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=2.0;
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(60,W/H,0.001,500);
+camera.position.set(0,0,18);
+camera.lookAt(0,0,0);
+
+// LUCI CINEMATICHE
+const amb=new THREE.AmbientLight(0x111111,3);scene.add(amb);
+const key=new THREE.SpotLight(0xffffff,600,100,Math.PI/4,0.1);
+key.position.set(5,8,8);key.castShadow=true;
+scene.add(key);scene.add(key.target);
+const fill=new THREE.PointLight(0xffffff,200,80);fill.position.set(-6,3,5);scene.add(fill);
+const rim=new THREE.SpotLight(0xffffff,300,80,Math.PI/5);rim.position.set(-4,10,-8);scene.add(rim);scene.add(rim.target);
+const bot=new THREE.PointLight(0xffffff,100,50);bot.position.set(0,-6,4);scene.add(bot);
+
+const SIGNALS=[
+  {t:'IRAN WAR · 95%',cat:'WAR',     col:new THREE.Color(1.0,0.04,0.01),bg:0x0a0000,hl:'CEASEFIRE HOLDS\nISRAEL KILLS 250+\nBEIRUT MOURNS'},
+  {t:'TRUMP · 88%',   cat:'POLITICS',col:new THREE.Color(0.9,0.6,0.0), bg:0x080400,hl:'LOW-KEY THEY SAID\nBOMBS STILL FALL\nHORMUZ BLOCKED'},
+  {t:'250+ DEAD · 82%',cat:'CRISIS', col:new THREE.Color(0.7,0.0,0.4), bg:0x060008,hl:'BLACK WEDNESDAY\n182 IN ONE DAY\nMOURNING'},
+  {t:'OIL $100 · 75%', cat:'ECONOMY',col:new THREE.Color(0.8,0.5,0.0), bg:0x080500,hl:'STRAIT BLOCKED\n20% WORLD OIL\nGLOBAL CRISIS'},
+  {t:'NATO · TRUMP · 72%',cat:'POL', col:new THREE.Color(0.4,0.0,0.9), bg:0x020008,hl:'PAY OR WE LEAVE\nALLIANCE SHAKES\nEUROPE PANICS'},
+  {t:'ARTEMIS · 70%',  cat:'TECH',   col:new THREE.Color(0.0,0.6,1.0), bg:0x000508,hl:'FIREBALL REENTRY\nCREW DESCENDS\nATMOSPHERE BURNS'},
+  {t:'PRESS KILLED · 85%',cat:'CRISIS',col:new THREE.Color(0.9,0.2,0.0),bg:0x080100,hl:'AL JAZEERA DOWN\nGAZA CITY STRIKE\nPRESS UNDER FIRE'},
+  {t:'HISTORY BANNED · 68%',cat:'POL',col:new THREE.Color(0.6,0.0,0.0),bg:0x050000,hl:'RUSSIA ERASES\nMEMORIAL ORG\nTRUTH ILLEGAL'},
+];
+
+const figures=[];
+let currentFig=null;
+let sigIdx=0,sigTimer=0,t=0;
+const SIG_DUR=4.0;
+
+const loader=new GLTFLoader();
+
+function loadFigure(callback){
+  loader.load('/face_real.glb',gltf=>{
+    const fig=gltf.scene;
+    const box=new THREE.Box3().setFromObject(fig);
+    const size=new THREE.Vector3();box.getSize(size);
+    const center=new THREE.Vector3();box.getCenter(center);
+    const sc=5.0/Math.max(size.x,size.y,size.z);
+    fig.scale.setScalar(sc);
+    fig.position.sub(center.multiplyScalar(sc));
+    fig.traverse(child=>{
+      if(child.isMesh){
+        child.castShadow=true;
+        child._orig=new Float32Array(child.geometry.attributes.position.array);
+      }
+    });
+    callback(fig);
+  },xhr=>{
+    document.getElementById('ls').textContent=Math.round(xhr.loaded/(xhr.total||1)*100)+'%';
+  },err=>console.error(err));
+}
+
+// Carica 3 istanze del modello per morphing
+let loaded=0;
+const INSTANCES=3;
+const pool=[];
+
+function init(){
+  loadFigure(fig=>{
+    pool.push(fig);
+    loaded++;
+    if(loaded===1){
+      // Usa prima istanza subito
+      currentFig=pool[0];
+      applySignal(SIGNALS[0],currentFig);
+      scene.add(currentFig);
+      scene.background=new THREE.Color(SIGNALS[0].bg);
+      document.getElementById('loading').style.display='none';
+      animate();
+      // Carica altre 2 in background
+      loadFigure(f=>{pool.push(f);});
+      loadFigure(f=>{pool.push(f);});
+    }
+  });
+}
+
+function applySignal(sig,fig){
+  const mat=new THREE.MeshStandardMaterial({
+    color:sig.col.clone().multiplyScalar(0.65),
+    emissive:sig.col.clone(),
+    emissiveIntensity:0.2,
+    roughness:sig.cat==='TECH'?0.02:sig.cat==='POLITICS'?0.3:0.85,
+    metalness:sig.cat==='TECH'?0.99:sig.cat==='POLITICS'?0.7:0.02,
+  });
+  fig.traverse(child=>{if(child.isMesh) child.material=mat;});
+  key.color.copy(sig.col).lerp(new THREE.Color(1,1,1),0.4);
+  fill.color.copy(sig.col).lerp(new THREE.Color(1,1,1),0.3);
+  rim.color.copy(sig.col).lerp(new THREE.Color(1,1,1),0.5);
+  bot.color.copy(sig.col);
+}
+
+function deform(fig,sig,t){
+  fig.traverse(child=>{
+    if(!child.isMesh||!child._orig) return;
+    const pos=child.geometry.attributes.position;
+    const orig=child._orig;
+    const cat=sig.cat;
+    for(let i=0;i<pos.count;i++){
+      const ox=orig[i*3],oy=orig[i*3+1],oz=orig[i*3+2];
+      const len=Math.sqrt(ox*ox+oy*oy+oz*oz)||0.001;
+      const nx=ox/len,ny=oy/len,nz=oz/len;
+      let w=0;
+      if(cat==='WAR'){
+        w=Math.sin(nx*16+t*3)*0.025+Math.abs(Math.sin(ny*20+t*3.5))*0.02;
+        // drip giù
+        const drip=Math.max(0,Math.sin(t*0.8+ox*4))*0.03;
+        pos.setXYZ(i,ox+nx*w*len*8,oy+ny*w*len*8-drip,oz+nz*w*len*8);
+        continue;
+      } else if(cat==='POLITICS'){
+        w=Math.sin(nx*10+t*2)*(nx>0?0.03:0.008)+Math.cos(ny*12+t*2.2)*0.015;
+      } else if(cat==='TECH'){
+        w=Math.round(Math.sin(nx*18+t*4)*4)/4*0.018;
+      } else if(cat==='CRISIS'){
+        w=Math.sin(nx*4+t*0.9)*0.012;
+        const melt=Math.max(0,Math.sin(t*0.5+ox*2))*0.025;
+        pos.setXYZ(i,ox+nx*w*len*6,oy-melt,oz+nz*w*len*6);
+        continue;
+      } else {
+        w=Math.sin(nx*6+t*1.2)*0.01+Math.cos(ny*8+t*1.5)*0.008;
+      }
+      pos.setXYZ(i,ox+nx*w*len*8,oy+ny*w*len*8,oz+nz*w*len*8);
+    }
+    pos.needsUpdate=true;
+    child.geometry.computeVertexNormals();
+  });
+}
+
+function updateHUD(sig,mt){
+  const c=sig.col;
+  const hex=`rgb(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)})`;
+  document.getElementById('sig').style.color=hex;
+  document.getElementById('sig').innerHTML=`NOISE — 09/04/2026<br>${sig.t}<br>TENSION: CRITICAL`;
+  document.getElementById('hl').style.color=hex;
+  document.getElementById('hl').innerHTML=sig.hl.replace(/\n/g,'<br>');
+  document.getElementById('fill').style.cssText=`background:${hex};width:${mt*100}%;height:1px`;
+  key.intensity=600+Math.sin(t*2)*150;
+  fill.intensity=200+Math.sin(t*1.8)*60;
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  t+=0.016;sigTimer+=0.016;
+
+  if(sigTimer>=SIG_DUR){
+    sigTimer=0;
+    sigIdx=(sigIdx+1)%SIGNALS.length;
+    const sig=SIGNALS[sigIdx];
+    scene.background=new THREE.Color(sig.bg);
+    if(currentFig) applySignal(sig,currentFig);
+  }
+
+  const mt=sigTimer/SIG_DUR;
+  const sig=SIGNALS[sigIdx];
+  updateHUD(sig,mt);
+
+  if(currentFig){
+    deform(currentFig,sig,t);
+    // VOLO — il personaggio vola libero nello spazio
+    currentFig.rotation.x=Math.sin(t*0.25)*0.8-0.3;
+    currentFig.rotation.y=t*0.4+Math.sin(t*0.18)*0.6;
+    currentFig.rotation.z=Math.sin(t*0.2)*0.4;
+    currentFig.position.x=Math.sin(t*0.3)*2.5;
+    currentFig.position.y=Math.cos(t*0.22)*1.5+Math.sin(t*0.4)*0.8;
+    currentFig.position.z=Math.sin(t*0.15)*1.5;
+  }
+
+  // camera che orbita lentamente
+  camera.position.x=Math.sin(t*0.06)*18*0.2;
+  camera.position.y=Math.sin(t*0.04)*2;
+  camera.position.z=18+Math.cos(t*0.06)*2;
+  camera.lookAt(0,0,0);
+
+  renderer.render(scene,camera);
+}
+
+init();
+</script>
+</body>
+</html>

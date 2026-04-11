@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden;display:flex;justify-content:center;align-items:center;height:100vh}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const W=450,H=800;
+const c=document.getElementById('c');
+c.width=W;c.height=H;
+const gl=c.getContext('webgl');
+const VS=`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+const FS=`
+precision highp float;
+uniform vec2 res;
+uniform float time;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.;float a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p*=2.1;a*=.5;}return v;}
+float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+float sdCyl(vec3 p,float r,float h){vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.));}
+float sdSph(vec3 p,float r){return length(p)-r;}
+
+float vaseR(float y){
+  if(y<-0.85) return 0.16;
+  if(y<-0.5) return mix(0.16,0.30,(y+0.85)/0.35);
+  if(y<0.1) return mix(0.30,0.44,(y+0.5)/0.6);
+  if(y<0.55) return mix(0.44,0.20,(y-0.1)/0.45);
+  if(y<0.72) return mix(0.20,0.27,(y-0.55)/0.17);
+  return 0.27;
+}
+float vase(vec3 p){
+  float r=vaseR(p.y);
+  float tex=fbm(vec2(atan(p.x,p.z)*3.,p.y*5.+time*0.05))*0.016;
+  float body=length(p.xz)-(r+tex);
+  float hole=sdCyl(p-vec3(0.,.65,0.),.17,.18);
+  float base=sdCyl(p-vec3(0.,-.9,0.),.20,.05);
+  float d=body;
+  d=max(d,-hole);
+  d=smin(d,base,.03);
+  return d;
+}
+
+vec2 scene(vec3 p){
+  float dV=vase(p);
+  float dF=p.y+0.95;
+  if(dV<dF) return vec2(dV,1.);
+  return vec2(dF,2.);
+}
+vec3 norm(vec3 p){vec2 e=vec2(.001,0.);return normalize(vec3(scene(p+e.xyy).x-scene(p-e.xyy).x,scene(p+e.yxy).x-scene(p-e.yxy).x,scene(p+e.yyx).x-scene(p-e.yyx).x));}
+float shad(vec3 ro,vec3 rd){float r=1.;float t=0.02;for(int i=0;i<32;i++){float h=scene(ro+rd*t).x;if(h<.001)return 0.;r=min(r,8.*h/t);t+=h;if(t>4.)break;}return r;}
+float ao(vec3 p,vec3 n){float o=0.;float s=1.;for(int i=0;i<5;i++){float h=.01+.12*float(i)/4.;float d=scene(p+h*n).x;o+=(h-d)*s;s*=.95;}return clamp(1.-3.*o,0.,1.);}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy/res-.5)*vec2(1.,res.y/res.x)*2.;
+  vec3 ro=vec3(sin(time*0.18)*0.5,0.25,2.6);
+  vec3 ta=vec3(0.,-0.15,0.);
+  vec3 ww=normalize(ta-ro);
+  vec3 uu=normalize(cross(ww,vec3(0,1,0)));
+  vec3 vv=cross(uu,ww);
+  vec3 rd=normalize(uv.x*uu+uv.y*vv+1.7*ww);
+
+  // cielo golden hour
+  vec3 sunDir=normalize(vec3(1.2,0.5,-0.8));
+  vec3 sunCol=vec3(1.0,0.75,0.4);
+  vec3 skyTop=vec3(0.08,0.12,0.22);
+  vec3 skyHor=vec3(0.42,0.28,0.12);
+  float sk=clamp(rd.y,0.,1.);
+  vec3 sky=mix(skyHor,skyTop,pow(sk,0.5));
+  sky+=sunCol*pow(max(0.,dot(rd,sunDir)),12.)*0.8;
+  sky+=sunCol*pow(max(0.,dot(rd,sunDir)),256.)*3.;
+  vec3 col=sky;
+
+  float t=0.;vec2 hit=vec2(0.);bool found=false;
+  for(int i=0;i<100;i++){
+    vec3 p=ro+rd*t;
+    hit=scene(p);
+    if(hit.x<.001){found=true;break;}
+    if(t>12.) break;
+    t+=hit.x*.85;
+  }
+
+  if(found){
+    vec3 p=ro+rd*t;
+    vec3 n=norm(p);
+    float sd=shad(p+n*.002,sunDir);
+    float occ=ao(p,n);
+    float diff=max(0.,dot(n,sunDir));
+    float skyd=max(0.,dot(n,vec3(0,1,0)))*.5;
+    vec3 hal=normalize(sunDir-rd);
+    float spec=pow(max(0.,dot(n,hal)),80.);
+    float fres=pow(1.-max(0.,dot(-rd,n)),4.);
+
+    vec3 matCol;
+    if(hit.y<1.5){
+      // VASO terracotta con venature
+      float clay=fbm(vec2(atan(p.x,p.z)*3.5,p.y*6.));
+      vec3 vc=mix(vec3(0.38,0.17,0.07),vec3(0.60,0.30,0.12),clay);
+      float vein=smoothstep(.35,.65,fbm(vec2(atan(p.x,p.z)*7.,p.y*9.)));
+      vc=mix(vc,vec3(0.12,0.05,0.02),vein*.55);
+      // patina scura sulle rientranze
+      float curv=clamp(dot(n,normalize(p-vec3(0.,p.y,0.)))*.5+.5,0.,1.);
+      vc=mix(vc*0.4,vc,curv);
+      matCol=vc*(diff*sd*sunCol*2.0+skyd*vec3(.25,.35,.55)*occ+vec3(.04,.03,.02));
+      matCol+=sunCol*spec*sd*.6;
+      matCol+=vec3(.25,.35,.55)*fres*.12;
+    } else {
+      // ASFALTO
+      float asp=fbm(p.xz*6.)*.5+.5;
+      vec3 rc=mix(vec3(.10,.10,.11),vec3(.20,.19,.18),asp);
+      float crack=smoothstep(.47,.5,fbm(p.xz*2.5));
+      rc=mix(rc,vec3(.05,.05,.06),crack*.6);
+      // linea gialla strada
+      float line=smoothstep(.01,.02,abs(fract(p.x*.4+.25)-.5)-.22);
+      rc=mix(vec3(.55,.48,.15),rc,line);
+      matCol=rc*(diff*sd*sunCol*1.4+skyd*vec3(.25,.35,.55)*occ+.04);
+      // rifesso vaso sulla strada umida
+      float wet=exp(-length(p.xz)*2.5)*.25;
+      vec3 refl=reflect(rd,n);
+      float rfv=max(0.,dot(refl,normalize(vec3(0.,1.,0.))))*wet;
+      matCol+=vec3(.38,.17,.07)*rfv;
+      matCol+=sunCol*spec*sd*.2;
+    }
+
+    float fog=1.-exp(-t*.06);
+    col=mix(matCol,sky,fog);
+  }
+
+  // grain
+  col+=vec3((hash(gl_FragCoord.xy+time)-.5)*.022);
+  // vignette
+  float vig=1.-smoothstep(.5,1.4,length(uv*vec2(.8,1.)));
+  col*=vig;
+  // ACES tonemapping
+  col=col*(2.51*col+.03)/(col*(2.43*col+.59)+.14);
+  col=pow(clamp(col,0.,1.),vec3(.4545));
+  gl_FragColor=vec4(col,1.);
+}`;
+function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(x));return x;}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));
+gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(prog);gl.useProgram(prog);
+const buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+const pl=gl.getAttribLocation(prog,'p');
+gl.enableVertexAttribArray(pl);gl.vertexAttribPointer(pl,2,gl.FLOAT,false,0,0);
+const uR=gl.getUniformLocation(prog,'res');
+const uT=gl.getUniformLocation(prog,'time');
+gl.uniform2f(uR,W,H);
+let tt=0;
+(function frame(){requestAnimationFrame(frame);tt+=0.016;gl.uniform1f(uT,tt);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);})();
+</script>
+</body>
+</html>

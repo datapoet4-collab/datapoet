@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:'Courier New',monospace}
+#wrap{position:relative;width:600px;height:900px;flex-shrink:0}
+canvas{display:block;width:600px!important;height:900px!important}
+#hud{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#title{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-size:6px;letter-spacing:8px;color:rgba(255,255,255,.18);white-space:nowrap;text-transform:uppercase}
+#controls{margin-top:12px;display:flex;gap:10px;align-items:center}
+#btnRec,#btnStop{font-family:'Courier New',monospace;font-size:7px;letter-spacing:3px;padding:5px 14px;border:1px solid rgba(255,255,255,.18);background:transparent;color:rgba(255,255,255,.45);cursor:pointer}
+#btnRec:hover{background:#ff2200;border-color:#ff2200;color:#fff}
+#btnStop{opacity:.2;pointer-events:none}
+#btnStop.active{opacity:1;pointer-events:all;color:#fff}
+#recStatus{font-size:6px;letter-spacing:3px;color:#ff2200;min-width:55px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div id="title">COLLATERAL</div>
+  </div>
+</div>
+<div id="controls">
+  <button id="btnRec">⏺ REC</button>
+  <button id="btnStop">⏹ STOP</button>
+  <span id="recStatus"></span>
+</div>
+<script type="module">
+import * as THREE from 'three';
+
+const RW=1200,RH=1800;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(RW,RH);
+renderer.setPixelRatio(2);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=2.2;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const canvas=renderer.domElement;
+canvas.style.width='600px';canvas.style.height='900px';
+document.getElementById('wrap').prepend(canvas);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x000000);
+const camera=new THREE.PerspectiveCamera(50,RW/RH,0.01,500);
+camera.position.set(0,0,12);camera.lookAt(0,0,0);
+
+const amb=new THREE.AmbientLight(0xffffff,.5);scene.add(amb);
+const key=new THREE.SpotLight(0xffffff,3000,300,Math.PI/6,.005);
+key.position.set(12,18,14);key.castShadow=true;
+key.shadow.mapSize.set(4096,4096);key.shadow.bias=-.001;
+scene.add(key);scene.add(key.target);
+const fill=new THREE.DirectionalLight(0xffffff,.4);fill.position.set(-10,4,8);scene.add(fill);
+const rim=new THREE.SpotLight(0xffffff,1500,300,Math.PI/8,.0);
+rim.position.set(-6,22,-18);scene.add(rim);scene.add(rim.target);
+const botL=new THREE.DirectionalLight(0xffffff,.3);botL.position.set(0,-15,5);scene.add(botL);
+
+function makeTex(type){
+  const s=512;const d=new Uint8Array(s*s*4);
+  for(let i=0;i<s*s;i++){
+    const x=i%s,y=Math.floor(i/s);let v=128;
+    if(type==='concrete'){v=80+Math.random()*110;if(Math.sin(x*.06)*Math.cos(y*.09)>.82)v=Math.max(20,v-70);if(Math.random()>.96)v=Math.max(10,v-90);}
+    else if(type==='metal'){v=110+Math.sin(y*.9+x*.015)*65+Math.random()*25;if(Math.random()>.98)v=Math.min(255,v+90);}
+    else if(type==='rubber'){v=22+Math.random()*35;if(Math.random()>.88)v+=18;}
+    else if(type==='marble'){const vn=Math.sin(x*.05+Math.sin(y*.08)*3)*Math.cos(y*.04)*128+128;v=Math.round(vn*.4+90+Math.random()*30);}
+    d[i*4]=v;d[i*4+1]=v;d[i*4+2]=v;d[i*4+3]=255;
+  }
+  const t=new THREE.DataTexture(d,s,s,THREE.RGBAFormat);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(3,3);t.needsUpdate=true;return t;
+}
+const TX={c:makeTex('concrete'),m:makeTex('metal'),r:makeTex('rubber'),w:makeTex('marble')};
+const mC=(col=0x555555)=>new THREE.MeshStandardMaterial({color:col,roughness:.97,metalness:.02,map:TX.c,roughnessMap:TX.c,bumpMap:TX.c,bumpScale:.08});
+const mM=(col=0xaaaaaa)=>new THREE.MeshStandardMaterial({color:col,roughness:.06,metalness:.99,map:TX.m,roughnessMap:TX.m});
+const mR=()=>new THREE.MeshStandardMaterial({color:0x0d0d0d,roughness:.99,metalness:.0,map:TX.r,roughnessMap:TX.r,bumpMap:TX.r,bumpScale:.03});
+const mW=(col=0xdddddd)=>new THREE.MeshStandardMaterial({color:col,roughness:.88,metalness:.03,map:TX.w,roughnessMap:TX.w,bumpMap:TX.w,bumpScale:.05});
+const G=()=>new THREE.Group();
+const M=(geo,mat)=>{const o=new THREE.Mesh(geo,mat);o.castShadow=true;o.receiveShadow=true;return o;};
+const S=2.4;
+
+// ── SATELLITE ─────────────────────────────────────────────────────────────
+function buildSatellite(){
+  const g=G();
+  // corpo centrale
+  const body=M(new THREE.BoxGeometry(.8*S,.8*S,.8*S,8,8,8),mM(0xbbbbbb));g.add(body);
+  // pannelli solari
+  [-1,1].forEach(sx=>{
+    const panel=M(new THREE.BoxGeometry(2.4*S,.05*S,1.0*S,18,2,8),mC(0x333333));
+    panel.position.set(sx*1.6*S,0,0);g.add(panel);
+    for(let r=0;r<3;r++) for(let cc=0;cc<6;cc++){
+      const cell=M(new THREE.BoxGeometry(.3*S,.07*S,.24*S,2,2,2),mM(0x555555));
+      cell.position.set(sx*1.6*S+(cc-2.5)*.36*S,.06*S,(r-1)*.32*S);g.add(cell);
+    }
+  });
+  // antenna parabolica
+  const dish=M(new THREE.CylinderGeometry(.5*S,.01*S,.35*S,28,8,true),mM(0xaaaaaa));
+  dish.position.set(0,.72*S,0);g.add(dish);
+  const dishRim=M(new THREE.TorusGeometry(.5*S,.03*S,10,48),mM(0x888888));
+  dishRim.rotation.x=Math.PI/2;dishRim.position.set(0,.72*S,0);g.add(dishRim);
+  const arm=M(new THREE.CylinderGeometry(.025*S,.025*S,.55*S,8,4),mM(0x999999));
+  arm.position.set(0,.44*S,0);g.add(arm);
+  // antenne laterali
+  [-1,1].forEach(sx=>{
+    const ant=M(new THREE.CylinderGeometry(.015*S,.015*S,.7*S,6,4),mM(0xcccccc));
+    ant.rotation.z=sx*.3;ant.position.set(sx*.35*S,-.55*S,0);g.add(ant);
+  });
+  // thruster in basso
+  for(let i=0;i<4;i++){
+    const thr=M(new THREE.CylinderGeometry(.06*S,.08*S,.14*S,10,4),mM(0x777777));
+    thr.position.set(Math.cos(i/4*Math.PI*2)*.35*S,-.52*S,Math.sin(i/4*Math.PI*2)*.35*S);
+    g.add(thr);
+  }
+  return g;
+}
+
+// ── DRONE — gomma nera, segue la figura ───────────────────────────────────
+function buildDrone(){
+  const g=G();
+  const body=M(new THREE.BoxGeometry(.7*S,.2*S,.7*S,8,4,8),mR());g.add(body);
+  const belly=M(new THREE.SphereGeometry(.22*S,16,16),mR());belly.scale.set(1,.55,1);belly.position.y=-.14*S;g.add(belly);
+  [[1,0],[0,1],[-1,0],[0,-1]].forEach(([ax,az])=>{
+    const arm=M(new THREE.BoxGeometry(1.0*S,.06*S,.08*S,10,2,2),mC(0x222222));
+    arm.rotation.y=Math.atan2(az,ax);arm.position.set(ax*.5*S,0,az*.5*S);g.add(arm);
+    const motor=M(new THREE.CylinderGeometry(.15*S,.15*S,.18*S,16,4),mR());
+    motor.position.set(ax*1.0*S,.06*S,az*1.0*S);g.add(motor);
+    const prop=M(new THREE.BoxGeometry(.75*S,.025*S,.11*S,10,1,2),mC(0x111111));
+    prop.position.set(ax*1.0*S,.16*S,az*1.0*S);g.add(prop);
+    const prop2=M(new THREE.BoxGeometry(.11*S,.025*S,.75*S,2,1,10),mC(0x111111));
+    prop2.position.set(ax*1.0*S,.16*S,az*1.0*S);g.add(prop2);
+  });
+  const gimbal=M(new THREE.SphereGeometry(.13*S,20,20),mR());gimbal.position.y=-.3*S;g.add(gimbal);
+  const lens=M(new THREE.CylinderGeometry(.065*S,.085*S,.11*S,20,4),mC(0x111111));lens.position.y=-.43*S;g.add(lens);
+  // payload missile
+  [-1,1].forEach(sx=>{
+    const pm=M(new THREE.CylinderGeometry(.05*S,.05*S,.55*S,10,6),mC(0x333333));
+    pm.position.set(sx*.22*S,-.2*S,.18*S);g.add(pm);
+    const pt=M(new THREE.ConeGeometry(.05*S,.15*S,10,4),mC(0x222222));
+    pt.position.set(sx*.22*S,-.54*S,.18*S);g.add(pt);
+  });
+  return g;
+}
+
+
+
+
+
+const satellite=buildSatellite();
+const drone=buildDrone();
+
+// entrambi in scena sempre
+scene.add(satellite);
+scene.add(drone);
+
+let tt=0;
+
+// REC
+let mediaRecorder=null,chunks=[];
+const btnRec=document.getElementById('btnRec');
+const btnStop=document.getElementById('btnStop');
+const recStatus=document.getElementById('recStatus');
+let recTimer=null;
+btnRec.addEventListener('click',()=>{
+  const stream=renderer.domElement.captureStream(60);chunks=[];
+  mediaRecorder=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:60000000});
+  mediaRecorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  mediaRecorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download='COLLATERAL_'+new Date().toISOString().slice(0,10)+'.webm';
+    a.click();URL.revokeObjectURL(url);
+    recStatus.textContent='';btnRec.style.opacity='1';btnRec.style.pointerEvents='all';btnStop.classList.remove('active');
+  };
+  mediaRecorder.start(100);btnRec.style.opacity='.3';btnRec.style.pointerEvents='none';btnStop.classList.add('active');
+  tt=0;
+  let sec=35;recStatus.textContent=`● ${sec}s`;
+  recTimer=setInterval(()=>{sec--;recStatus.textContent=`● ${sec}s`;if(sec<=0){clearInterval(recTimer);mediaRecorder.stop();}},1000);
+});
+btnStop.addEventListener('click',()=>{if(mediaRecorder&&mediaRecorder.state!=='inactive'){clearInterval(recTimer);mediaRecorder.stop();}});
+
+function animate(){
+  requestAnimationFrame(animate);
+  tt+=.016;
+
+  // satellite — volo principale
+  satellite.rotation.x=Math.sin(tt*.25)*.8-.3;
+  satellite.rotation.y=tt*.4+Math.sin(tt*.18)*.6;
+  satellite.rotation.z=Math.sin(tt*.2)*.4;
+  satellite.position.x=Math.sin(tt*.3)*2.5;
+  satellite.position.y=Math.cos(tt*.22)*1.5+Math.sin(tt*.4)*.8;
+  satellite.position.z=Math.sin(tt*.15)*1.5;
+
+  // drone — segue il satellite con ritardo, sempre vicino
+  const lag=.8;
+  drone.rotation.x=Math.sin((tt-lag)*.25)*.8-.3;
+  drone.rotation.y=(tt-lag)*.4+Math.sin((tt-lag)*.18)*.6;
+  drone.rotation.z=Math.sin((tt-lag)*.2)*.4;
+  drone.position.x=Math.sin((tt-lag)*.3)*2.5+Math.sin(tt*.8)*.4;
+  drone.position.y=Math.cos((tt-lag)*.22)*1.5+Math.sin((tt-lag)*.4)*.8+2.0;
+  drone.position.z=Math.sin((tt-lag)*.15)*1.5-1.0;
+
+  camera.position.x=Math.sin(tt*.06)*18*.2;
+  camera.position.y=Math.sin(tt*.04)*2;
+  camera.position.z=12+Math.cos(tt*.06)*2;
+  camera.lookAt(0,0,0);
+  key.intensity=3000+Math.sin(tt*2)*500;
+  rim.intensity=1500+Math.sin(tt*1.5)*300;
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Courier New',monospace}
+#loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff1400;font-size:11px;letter-spacing:3px;text-align:center;z-index:10}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#info{position:absolute;top:16px;left:16px;font-size:9px;line-height:2.2;letter-spacing:2px}
+#cur{position:absolute;bottom:55px;left:16px;font-size:11px;letter-spacing:3px;font-weight:bold}
+#wm{position:absolute;bottom:16px;right:16px;font-size:8px;letter-spacing:2px;color:rgba(255,255,255,0.15)}
+#rec{position:absolute;bottom:16px;left:16px;font-size:9px;padding:7px 16px;border:1px solid;cursor:pointer;pointer-events:all;background:rgba(0,0,0,0.7);letter-spacing:2px}
+#sig-bar{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px}
+.sig-btn{font-size:7px;letter-spacing:1px;padding:4px 8px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.5);color:rgba(255,255,255,0.4);cursor:pointer;pointer-events:all;text-align:left}
+.sig-btn.active{color:#fff;border-color:#fff}
+</style>
+</head>
+<body>
+<div id="loading">NOISE — DATA POET<br><span id="ls">LOADING TRUMP...</span></div>
+<div id="hud">
+  <div id="info"></div>
+  <div id="cur"></div>
+  <div id="wm">DATA POET · NOISE #001 · 1/1 · 04/07/2026</div>
+  <button id="rec" onclick="toggleRec()">● REC 30s</button>
+  <div id="sig-bar"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+const W=450,H=800;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.8;
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,W/H,0.001,200);
+camera.position.set(0,0,12);
+camera.lookAt(0,0,0);
+
+// SEGNALI
+const SIGNALS=[
+  {t:'2026 Iran war',   c:'war',     v:0.95, bg:0xff0000, col:new THREE.Color(0.88,0.04,0.01), deform:'fracture'},
+  {t:'Trump Threats',   c:'war',     v:0.88, bg:0xcc0000, col:new THREE.Color(0.80,0.03,0.01), deform:'fracture'},
+  {t:'Donald Trump',    c:'politics',v:0.85, bg:0xffcc00, col:new THREE.Color(0.85,0.65,0.0),  deform:'distort'},
+  {t:'Tucker Carlson',  c:'politics',v:0.65, bg:0x6600cc, col:new THREE.Color(0.45,0.03,0.85), deform:'distort'},
+  {t:'Artemis II',      c:'tech',    v:0.70, bg:0x001133, col:new THREE.Color(0.0,0.6,1.0),    deform:'glitch'},
+  {t:'MegaTrain LLMs',  c:'tech',    v:0.68, bg:0x002244, col:new THREE.Color(0.0,0.55,0.95),  deform:'glitch'},
+  {t:'WrestleMania 42', c:'culture', v:0.60, bg:0x884400, col:new THREE.Color(1.0,0.55,0.0),   deform:'pulse'},
+  {t:'Kanye West',      c:'culture', v:0.65, bg:0x553300, col:new THREE.Color(0.95,0.45,0.0),  deform:'pulse'},
+  {t:'Deaths in 2026',  c:'human',   v:0.75, bg:0x003311, col:new THREE.Color(0.0,0.7,0.35),   deform:'melt'},
+  {t:'Christina Koch',  c:'human',   v:0.68, bg:0x002208, col:new THREE.Color(0.0,0.6,0.3),    deform:'melt'},
+];
+
+let sigIdx=0;
+let sigTimer=0;
+const SIG_DUR=3.5;
+
+// costruisce sidebar segnali
+const bar=document.getElementById('sig-bar');
+SIGNALS.forEach((s,i)=>{
+  const btn=document.createElement('div');
+  btn.className='sig-btn';
+  btn.id=`sig-${i}`;
+  btn.textContent=s.t.substring(0,14);
+  btn.style.borderLeftColor=`#${s.bg.toString(16).padStart(6,'0')}`;
+  btn.onclick=()=>{sigIdx=i;sigTimer=0;applySignal(s);};
+  bar.appendChild(btn);
+});
+
+// luci
+const amb=new THREE.AmbientLight(0xffffff,1);scene.add(amb);
+const key=new THREE.SpotLight(0xffffff,600,80,Math.PI/4,0.08);
+key.position.set(4,6,6);key.castShadow=true;
+key.shadow.mapSize.width=2048;key.shadow.mapSize.height=2048;
+scene.add(key);scene.add(key.target);
+const fill=new THREE.PointLight(0xffffff,200,60);fill.position.set(-5,2,4);scene.add(fill);
+const rim=new THREE.PointLight(0xffffff,150,70);rim.position.set(-3,8,-6);scene.add(rim);
+const bot=new THREE.PointLight(0xffffff,80,35);bot.position.set(0,-5,3);scene.add(bot);
+
+const faceMeshes=[];
+let model=null;
+let currentMats=[];
+
+function applySignal(sig){
+  // sfondo
+  scene.background=new THREE.Color(sig.bg);
+  scene.fog=new THREE.FogExp2(sig.bg,0.04);
+
+  // materiale monocromatico — UNA sola tinta come immagine 4
+  const mat=new THREE.MeshStandardMaterial({
+    color:sig.col.clone().multiplyScalar(0.7),
+    emissive:sig.col.clone(),
+    emissiveIntensity:sig.c==='tech'?0.4:0.15,
+    roughness:sig.c==='tech'?0.05:sig.c==='human'?0.95:0.75,
+    metalness:sig.c==='tech'?0.98:sig.c==='politics'?0.6:0.05,
+  });
+
+  faceMeshes.forEach(m=>{
+    m.material=mat;
+    m.material.needsUpdate=true;
+  });
+
+  // luci colorate
+  const lc=sig.col.clone();
+  key.color.copy(lc).lerp(new THREE.Color(1,1,1),0.4);
+  fill.color.copy(lc).lerp(new THREE.Color(1,1,1),0.3);
+  bot.color.copy(lc);
+  rim.color.set(0xffffff);
+
+  // HUD
+  const cr=sig.col.clone();
+  const hex=`rgb(${Math.round(cr.r*255)},${Math.round(cr.g*255)},${Math.round(cr.b*255)})`;
+  document.getElementById('info').style.color=hex;
+  document.getElementById('info').innerHTML=`NOISE — 04/07/2026<br>${sig.c.toUpperCase()} · ${Math.round(sig.v*100)}%<br>TENSION: CRITICAL`;
+  document.getElementById('cur').style.color=hex;
+  document.getElementById('cur').textContent='▶ '+sig.t;
+  document.getElementById('rec').style.color=hex;
+  document.getElementById('rec').style.borderColor=hex;
+
+  // update sidebar
+  document.querySelectorAll('.sig-btn').forEach((b,i)=>{
+    b.classList.toggle('active',i===sigIdx);
+  });
+}
+
+const loader=new GLTFLoader();
+loader.load('/face_real.glb',gltf=>{
+  model=gltf.scene;
+  const box=new THREE.Box3().setFromObject(model);
+  const size=new THREE.Vector3();
+  const center=new THREE.Vector3();
+  box.getSize(size);box.getCenter(center);
+  const sc=2.0/Math.max(size.x,size.y,size.z);
+  model.scale.setScalar(sc);
+  model.position.set(-center.x*sc,-center.y*sc-4.5,-center.z*sc);
+
+  model.traverse(child=>{
+    if(child.isMesh){
+      child.castShadow=true;
+      child.receiveShadow=true;
+      child._orig=new Float32Array(child.geometry.attributes.position.array);
+      faceMeshes.push(child);
+    }
+  });
+
+  scene.add(model);
+  applySignal(SIGNALS[0]);
+  document.getElementById('loading').style.display='none';
+},xhr=>{
+  document.getElementById('ls').textContent=Math.round(xhr.loaded/(xhr.total||1)*100)+'%';
+},err=>console.error(err));
+
+// DEFORMAZIONI per stile
+function deform(sig, t){
+  const v=sig.v;
+  faceMeshes.forEach(mesh=>{
+    const pos=mesh.geometry.attributes.position;
+    const orig=mesh._orig;if(!orig)return;
+    for(let i=0;i<pos.count;i++){
+      const ox=orig[i*3],oy=orig[i*3+1],oz=orig[i*3+2];
+      const len=Math.sqrt(ox*ox+oy*oy+oz*oz)||0.001;
+      const nx=ox/len,ny=oy/len,nz=oz/len;
+      let w=0;
+      if(sig.deform==='fracture'){
+        w=Math.sin(nx*18+t*3)*0.032*v
+         +Math.abs(Math.sin(ny*22+t*3.8))*0.025*v
+         +Math.sin(nz*15+t*2.5)*0.018*v;
+        // drip verso basso
+        const drip=Math.max(0,Math.sin(t*0.8+ox*3))*0.05*v;
+        pos.setXYZ(i,ox+nx*w*len*8,oy+ny*w*len*8-drip,oz+nz*w*len*8);
+        continue;
+      } else if(sig.deform==='distort'){
+        w=Math.sin(nx*12+t*2)*0.028*v*(nx>0?2:0.3)
+         +Math.cos(ny*14+t*2.5)*0.02*v;
+      } else if(sig.deform==='glitch'){
+        w=Math.round(Math.sin(nx*20+t*4)*4)/4*0.022*v
+         +Math.sin(ny*28+t*5)*0.012*v;
+      } else if(sig.deform==='pulse'){
+        w=(Math.sin(nx*6+t*2)*0.02+Math.sin(t*3)*0.01)*v;
+      } else if(sig.deform==='melt'){
+        w=Math.sin(nx*4+t*0.8)*0.015*v;
+        const drip2=Math.max(0,Math.sin(t*0.5+ox*2))*0.04*v;
+        pos.setXYZ(i,ox+nx*w*len*6,oy+ny*w*len*6-drip2,oz+nz*w*len*6);
+        continue;
+      }
+      pos.setXYZ(i,ox+nx*w*len*8,oy+ny*w*len*8,oz+nz*w*len*8);
+    }
+    pos.needsUpdate=true;
+    mesh.geometry.computeVertexNormals();
+  });
+}
+
+let t=0;
+
+// auto-ciclo segnali
+function autoNext(){
+  sigIdx=(sigIdx+1)%SIGNALS.length;
+  applySignal(SIGNALS[sigIdx]);
+}
+
+window.toggleRec=function(){
+  if(!window._rec){
+    const ch=[];
+    const stream=renderer.domElement.captureStream(30);
+    const mr=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
+    mr.ondataavailable=e=>ch.push(e.data);
+    mr.onstop=()=>{
+      const b=new Blob(ch,{type:'video/webm'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(b);
+      a.download='NOISE_001.webm';
+      a.click();
+    };
+    mr.start();window._rec=mr;
+    document.getElementById('rec').textContent='■ STOP';
+    setTimeout(()=>{if(window._rec)window.toggleRec();},31000);
+  } else {
+    window._rec.stop();window._rec=null;
+    document.getElementById('rec').textContent='● REC 30s';
+  }
+};
+
+function animate(){
+  requestAnimationFrame(animate);
+  t+=0.016;
+  sigTimer+=0.016;
+
+  if(sigTimer>=SIG_DUR){
+    sigTimer=0;
+    autoNext();
+  }
+
+  const sig=SIGNALS[sigIdx];
+  if(model) deform(sig,t);
+
+  if(model){
+    model.rotation.y=Math.sin(t*0.15)*0.2;
+    model.rotation.x=Math.sin(t*0.1)*0.05;
+    model.position.y=-4.5+Math.sin(t*0.9)*0.08;
+  }
+
+  // morph colore sfondo
+  const mt=sigTimer/SIG_DUR;
+  const next=SIGNALS[(sigIdx+1)%SIGNALS.length];
+  const bgCur=new THREE.Color(sig.bg);
+  const bgNext=new THREE.Color(next.bg);
+  scene.background=bgCur.lerp(bgNext,mt*mt);
+
+  key.intensity=600+Math.sin(t*2)*150;
+  fill.intensity=200+Math.sin(t*1.8)*60;
+  bot.intensity=80+Math.sin(t*2.2)*25;
+
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>

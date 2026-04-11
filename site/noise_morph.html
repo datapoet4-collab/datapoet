@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<style>
+*{margin:0;padding:0}
+body{background:#000;overflow:hidden;width:100vw;height:100vh;font-family:'Courier New',monospace}
+canvas{display:block}
+#hud{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#sig{position:absolute;top:18px;left:18px;font-size:6px;letter-spacing:4px;line-height:2.5;color:rgba(255,255,255,.28);text-transform:uppercase}
+#hl{position:absolute;bottom:38px;left:18px;right:18px;font-size:10px;letter-spacing:6px;line-height:1.9;text-transform:uppercase;font-weight:bold;color:#fff}
+#bar{position:absolute;bottom:20px;left:18px;right:18px;height:1px;background:rgba(255,255,255,.04)}
+#fill{height:1px;background:rgba(255,255,255,.3);width:0%}
+#wm{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:5px;letter-spacing:5px;color:rgba(255,255,255,.08);white-space:nowrap}
+#controls{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center}
+#btnRec,#btnStop{font-family:'Courier New',monospace;font-size:8px;letter-spacing:3px;padding:5px 14px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.5);cursor:pointer}
+#btnRec:hover{background:#ff2200;border-color:#ff2200;color:#fff}
+#btnStop{opacity:.2;pointer-events:none}
+#btnStop.active{opacity:1;pointer-events:all;color:#fff}
+#recStatus{font-size:7px;letter-spacing:3px;color:#ff2200;min-width:60px}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="sig"></div>
+  <div id="hl"></div>
+  <div id="bar"><div id="fill"></div></div>
+  <div id="wm">DATA POET · NOISE · 10/04/2026</div>
+</div>
+<div id="controls">
+  <button id="btnRec">⏺ REC 60s</button>
+  <button id="btnStop">⏹ STOP</button>
+  <span id="recStatus"></span>
+</div>
+<script type="module">
+import * as THREE from 'three';
+
+const W=window.innerWidth,H=window.innerHeight;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(W,H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=2.2;
+renderer.shadowMap.enabled=true;
+document.body.prepend(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x000000);
+const camera=new THREE.PerspectiveCamera(50,W/H,0.01,500);
+camera.position.set(0,0,18);
+camera.lookAt(0,0,0);
+
+const amb=new THREE.AmbientLight(0xffffff,.5);scene.add(amb);
+const key=new THREE.SpotLight(0xffffff,3000,300,Math.PI/6,.005);
+key.position.set(12,18,14);key.castShadow=true;
+key.shadow.mapSize.set(2048,2048);key.shadow.bias=-.001;
+scene.add(key);scene.add(key.target);
+const fill=new THREE.DirectionalLight(0xffffff,.4);fill.position.set(-10,4,8);scene.add(fill);
+const rim=new THREE.SpotLight(0xffffff,1500,300,Math.PI/8,0);
+rim.position.set(-6,22,-18);scene.add(rim);scene.add(rim.target);
+const bot=new THREE.DirectionalLight(0xffffff,.3);bot.position.set(0,-15,5);scene.add(bot);
+
+function makeTex(type){
+  const s=256;const d=new Uint8Array(s*s*4);
+  for(let i=0;i<s*s;i++){
+    const x=i%s,y=Math.floor(i/s);let v=128;
+    if(type==='c'){v=80+Math.random()*110;if(Math.random()>.96)v=20;}
+    else if(type==='m'){v=110+Math.sin(y*.9)*65+Math.random()*25;}
+    else if(type==='r'){v=22+Math.random()*35;}
+    else{v=Math.round(Math.sin(x*.05+Math.sin(y*.08)*3)*60+160+Math.random()*20);}
+    d[i*4]=v;d[i*4+1]=v;d[i*4+2]=v;d[i*4+3]=255;
+  }
+  const t=new THREE.DataTexture(d,s,s,THREE.RGBAFormat);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(3,3);t.needsUpdate=true;return t;
+}
+const TX={c:makeTex('c'),m:makeTex('m'),r:makeTex('r'),w:makeTex('w')};
+
+const PALETTE=[
+  {col:0xffffff,r:.88,m:.03,tx:'w'},
+  {col:0x111111,r:.99,m:.0, tx:'r'},
+  {col:0xaaaaaa,r:.08,m:.99,tx:'m'},
+  {col:0x555555,r:.95,m:.05,tx:'c'},
+  {col:0xdddddd,r:.85,m:.04,tx:'w'},
+  {col:0x333333,r:.92,m:.08,tx:'c'},
+  {col:0x999999,r:.12,m:.98,tx:'m'},
+];
+function makeMat(idx){
+  const p=PALETTE[idx%PALETTE.length];
+  return new THREE.MeshStandardMaterial({
+    color:p.col,roughness:p.r,metalness:p.m,
+    map:TX[p.tx],roughnessMap:TX[p.tx],bumpMap:TX[p.tx],bumpScale:.06,
+  });
+}
+
+const SEG=80;
+const geo=new THREE.SphereGeometry(1,SEG,SEG);
+const N=geo.attributes.position.count;
+const sphere=new Float32Array(geo.attributes.position.array);
+
+function buildPose(id){
+  const out=new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    const sx=sphere[i*3],sy=sphere[i*3+1],sz=sphere[i*3+2];
+    const nx=sx,ny=sy,nz=sz;
+    const phi=Math.atan2(sz,sx);
+    let x,y,z;
+    if(id===0){ // MISSILE
+      const ry=3.5+Math.max(0,ny)*2.5;
+      const rx=.6+Math.max(0,-ny)*.1;
+      const fin=ny<-.5?1+Math.abs(Math.sin(phi*4))*.8:1;
+      x=nx*rx*fin; y=ny*ry; z=nz*rx*fin;
+    } else if(id===1){ // BUSTO
+      const head=ny>.4?1+(ny-.4)*1.4:1;
+      const sh=Math.abs(ny-.05)<.3?1.4:1;
+      const wa=Math.abs(ny+.2)<.15?.65:1;
+      x=nx*sh*wa*head*1.6; y=ny*2.8; z=nz*sh*wa*head*1.1;
+    } else if(id===2){ // BARREL
+      const belly=1+Math.sin((ny+1)*Math.PI*.5)*.5;
+      const hoop=Math.abs(Math.sin((ny+1)*Math.PI*3))>.9?1.15:belly;
+      x=nx*hoop*2.2; y=ny*2.2; z=nz*hoop*2.2;
+    } else if(id===3){ // CAMERA-BOX
+      const ax=Math.abs(nx),ay=Math.abs(ny),az=Math.abs(nz);
+      const m=Math.max(ax,ay,az)||.001;
+      const cx=nx/m,cy=ny/m,cz=nz/m;
+      const lens=nz>0&&az===m&&ax<.55&&ay<.45?1+(az-.5)*3:1;
+      x=cx*2.8; y=cy*1.8; z=cz*lens*2.2;
+    } else if(id===4){ // ROCKET
+      const boost=Math.abs(Math.sin(phi*2+.8))>.6&&Math.abs(ny)<.6;
+      const tp=1-Math.abs(ny)*.2;
+      x=nx*(boost?2.2:1.2)*tp; y=ny*3.8; z=nz*(boost?2.2:1.2)*tp;
+    } else if(id===5){ // FIGURA
+      const arm=Math.abs(ny)<.3&&Math.abs(nx)>.5?1.6:1;
+      const leg=ny<-.25?(nx>0?.3:-.3):0;
+      x=(nx+leg)*arm*1.4; y=ny*3.5; z=nz*.9;
+    } else if(id===6){ // AEREO
+      const wing=Math.abs(nz)>.25&&Math.abs(ny)<.3?1+(Math.abs(nz)-.25)*5:1;
+      const fus=Math.abs(nz)<.3?1:.3;
+      x=nx*fus*1.1+nx*(1-fus)*3.5; y=ny*1.0; z=nz*wing;
+    } else { // ROVINE
+      const noise=Math.sin(nx*7+ny*9)*Math.cos(nz*8)*.5;
+      const sh=Math.floor((phi+Math.PI)/(Math.PI*2/5))/5;
+      x=nx*(2.0+noise+sh*.4); y=ny*(2.2+Math.abs(noise)*.6); z=nz*(2.0+noise+sh*.4);
+    }
+    out[i*3]=x; out[i*3+1]=y; out[i*3+2]=z;
+  }
+  return out;
+}
+
+const POSES=[];
+for(let i=0;i<8;i++) POSES.push(buildPose(i));
+
+let curPose=new Float32Array(POSES[0]);
+let fromPose=new Float32Array(POSES[0]);
+let toPose=POSES[0];
+let morphProgress=1;
+const MORPH_DUR=2.5;
+
+function stepMorph(dt){
+  if(morphProgress>=1) return;
+  morphProgress=Math.min(1,morphProgress+dt/MORPH_DUR);
+  const e=morphProgress<.5?2*morphProgress*morphProgress:1-Math.pow(-2*morphProgress+2,2)/2;
+  for(let i=0;i<N*3;i++){
+    curPose[i]=fromPose[i]+(toPose[i]-fromPose[i])*e;
+  }
+}
+
+function triggerMorph(poseId){
+  fromPose=new Float32Array(curPose);
+  toPose=POSES[poseId];
+  morphProgress=0;
+}
+
+function writeGeo(cat,t){
+  const pos=geo.attributes.position;
+  for(let i=0;i<N;i++){
+    const ox=curPose[i*3],oy=curPose[i*3+1],oz=curPose[i*3+2];
+    const len=Math.sqrt(ox*ox+oy*oy+oz*oz)||.001;
+    const nx=ox/len,ny=oy/len,nz=oz/len;
+    let dx=0,dy=0,dz=0;
+    if(cat==='WAR'){
+      const w=Math.sin(nx*18+t*3.5)*.04+Math.abs(Math.sin(ny*22+t*4))*.03;
+      dx=nx*w*len*8; dy=ny*w*len*8-Math.max(0,Math.sin(t*.9+ox*.5))*.15; dz=nz*w*len*8;
+    } else if(cat==='POL'){
+      const w=Math.sin(nx*11+t*2.2)*.04+Math.cos(ny*13+t*2.5)*.02;
+      dx=nx*w*len*7; dy=ny*w*len*7; dz=nz*w*len*7;
+    } else if(cat==='TECH'){
+      const w=Math.round(Math.sin(nx*20+t*5)*5)/5*.025;
+      dx=nx*w*len*7; dy=ny*w*len*7; dz=nz*w*len*7;
+    } else if(cat==='CRISIS'){
+      const w=Math.sin(nx*5+t*.95)*.018;
+      dy=-Math.max(0,Math.sin(t*.55+ox*.4))*.14;
+      dx=nx*w*len*6; dy+=ny*w*len*6; dz=nz*w*len*6;
+    } else if(cat==='ECO'){
+      const b=Math.sin(t*2)*.07;
+      dx=ox*b; dy=oy*b; dz=oz*b;
+    } else {
+      const w=Math.sin(nx*7+t*1.4)*.015+Math.cos(ny*9+t*1.7)*.012;
+      dx=nx*w*len*7; dy=ny*w*len*7; dz=nz*w*len*7;
+    }
+    pos.setXYZ(i,ox+dx,oy+dy,oz+dz);
+  }
+  pos.needsUpdate=true;
+  geo.computeVertexNormals();
+}
+
+const mesh=new THREE.Mesh(geo,makeMat(0));
+mesh.castShadow=true; mesh.receiveShadow=true;
+scene.add(mesh);
+
+const SIGNALS=[
+  {t:'IRAN WAR · 95%',     cat:'WAR',   hl:'CEASEFIRE HOLDS\nISRAEL STRIKES 250+\nBEIRUT MOURNS',      tension:'CRITICAL'},
+  {t:'TRUMP · 88%',        cat:'POL',   hl:'LOW-KEY THEY SAID\nBOMBS STILL FALL\nHORMUZ BLOCKED',      tension:'HIGH'},
+  {t:'250+ DEAD LEBANON',  cat:'CRISIS',hl:'BLACK WEDNESDAY\n182 IN ONE DAY\nNATIONAL MOURNING',        tension:'CRITICAL'},
+  {t:'OIL $100 · 75%',     cat:'ECO',   hl:'HORMUZ STANDSTILL\n20% WORLD OIL\nGLOBAL CRISIS',          tension:'HIGH'},
+  {t:'ARTEMIS FIREBALL',   cat:'TECH',  hl:'REENTRY BEGINS\nFIREBALL DESCENT\nCREW RETURNS',            tension:'ELEVATED'},
+  {t:'PRESS KILLED · 85%', cat:'CRISIS',hl:'AL JAZEERA DOWN\nGAZA CITY STRIKE\nPRESS UNDER FIRE',      tension:'CRITICAL'},
+  {t:'EARTHQUAKE 4.9',     cat:'WAR',   hl:'EAST INDONESIA\n100 HOUSES GONE\nGROUND SHAKES',            tension:'HIGH'},
+  {t:'ZELENSKYY DAMASCUS', cat:'POL',   hl:'FIRST VISIT SYRIA\nSECURITY TIES\nNEW ALLIANCE',            tension:'MODERATE'},
+  {t:'S&P +7 SESSIONS',    cat:'ECO',   hl:'MARKETS RISE\nWHILE WAR BURNS\nLONGEST SINCE OCT',         tension:'LOW'},
+  {t:'RUSSIA BANS HISTORY',cat:'POL',   hl:'MEMORIAL ORG\nDECLARED EXTREMIST\nTRUTH ERASED',           tension:'HIGH'},
+  {t:'BRAZIL GAMBLING BAN',cat:'ECO',   hl:'LULA BANS\nONLINE GAMBLING\nMILLIONS AFFECTED',            tension:'MODERATE'},
+  {t:'NATO · TRUMP · 72%', cat:'POL',   hl:'PAY OR WE LEAVE\nALLIANCE SHAKES\nEUROPE PANICS',          tension:'HIGH'},
+  {t:'TIGER WOODS ARREST', cat:'CUL',   hl:'TIGER WOODS\nFLORIDA ARREST\nDRUG CHARGES',                tension:'LOW'},
+  {t:'GREECE SOCIAL MEDIA',cat:'TECH',  hl:'GREECE BANS\nSOCIAL MEDIA\nUNDER 15',                      tension:'MODERATE'},
+  {t:'GERMANY MILITARY',   cat:'WAR',   hl:'GERMANY SUSPENDS\nMILITARY ABROAD\nMEN UNDER 45',           tension:'HIGH'},
+  {t:'DOUG ALLAN DIES',    cat:'CUL',   hl:'WILDLIFE CAMERAMAN\nDOUG ALLAN DIES\nIN NEPAL',             tension:'LOW'},
+  {t:'NIGERIA TERRORISM',  cat:'WAR',   hl:'500 TERROR SUSPECTS\nMASS TRIAL\nBEGINS TODAY',             tension:'CRITICAL'},
+  {t:'UNESCO BIJAGOS',     cat:'CUL',   hl:'GUINEA-BISSAU\nBIJAGOS ISLANDS\nUNESCO HERITAGE',           tension:'LOW'},
+  {t:'CHINA IRAN DEAL',    cat:'POL',   hl:'CHINA BROKERED\nIRAN PEACE DEAL\nDIPLOMACY WINS',           tension:'MODERATE'},
+  {t:'COLOMBIA BUDGET',    cat:'ECO',   hl:'COLOMBIA PETRO\nEMERGENCY DECREE\nBUDGET CRISIS',           tension:'HIGH'},
+].map((s,i)=>({...s,idx:i}));
+
+const TOTAL=60., SIG_DUR=TOTAL/SIGNALS.length; // 3s per notizia
+let sigIdx=0,sigTimer=0,tt=0,totalTimer=0,lastT=performance.now();
+
+function switchTo(idx){
+  const sig=SIGNALS[idx];
+  triggerMorph(idx%8);
+  mesh.material=makeMat(idx);
+  document.getElementById('sig').innerHTML=`NOISE — 10/04/2026 · ${sig.t} · ${sig.tension}`;
+  document.getElementById('hl').innerHTML=sig.hl.replace(/\n/g,'<br>');
+}
+switchTo(0);
+
+let mediaRecorder=null,chunks=[];
+const btnRec=document.getElementById('btnRec');
+const btnStop=document.getElementById('btnStop');
+const recStatus=document.getElementById('recStatus');
+let recTimer=null;
+btnRec.addEventListener('click',()=>{
+  const stream=renderer.domElement.captureStream(60);
+  chunks=[];
+  mediaRecorder=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:40000000});
+  mediaRecorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  mediaRecorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download='noise_morph_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.webm';
+    a.click();URL.revokeObjectURL(url);
+    recStatus.textContent='';
+    btnRec.style.opacity='1';btnRec.style.pointerEvents='all';
+    btnStop.classList.remove('active');
+  };
+  mediaRecorder.start(100);
+  btnRec.style.opacity='.3';btnRec.style.pointerEvents='none';
+  btnStop.classList.add('active');
+  tt=0;sigTimer=0;totalTimer=0;sigIdx=0;switchTo(0);
+  let sec=60;recStatus.textContent=`● REC ${sec}s`;
+  recTimer=setInterval(()=>{sec--;recStatus.textContent=`● REC ${sec}s`;if(sec<=0){clearInterval(recTimer);mediaRecorder.stop();}},1000);
+});
+btnStop.addEventListener('click',()=>{
+  if(mediaRecorder&&mediaRecorder.state!=='inactive'){clearInterval(recTimer);mediaRecorder.stop();}
+});
+
+function animate(){
+  requestAnimationFrame(animate);
+  const now=performance.now();
+  const dt=Math.min((now-lastT)/1000,.05);lastT=now;
+  tt+=dt;sigTimer+=dt;totalTimer+=dt;
+
+  if(totalTimer>=TOTAL){totalTimer=0;sigIdx=0;sigTimer=0;switchTo(0);}
+  if(sigTimer>=SIG_DUR){sigTimer=0;sigIdx=(sigIdx+1)%SIGNALS.length;switchTo(sigIdx);}
+
+  const sig=SIGNALS[sigIdx];
+  stepMorph(dt);
+  writeGeo(sig.cat,tt);
+
+  mesh.rotation.x=Math.sin(tt*.25)*.8-.3;
+  mesh.rotation.y=tt*.4+Math.sin(tt*.18)*.6;
+  mesh.rotation.z=Math.sin(tt*.2)*.4;
+  mesh.position.x=Math.sin(tt*.3)*2.5;
+  mesh.position.y=Math.cos(tt*.22)*1.5+Math.sin(tt*.4)*.8;
+  mesh.position.z=Math.sin(tt*.15)*1.5;
+
+  document.getElementById('fill').style.width=(sigTimer/SIG_DUR*100)+'%';
+
+  camera.position.x=Math.sin(tt*.06)*3.6;
+  camera.position.y=Math.sin(tt*.04)*2;
+  camera.position.z=18+Math.cos(tt*.06)*2;
+  camera.lookAt(0,0,0);
+  key.intensity=3000+Math.sin(tt*2)*500;
+  rim.intensity=1500+Math.sin(tt*1.5)*300;
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>

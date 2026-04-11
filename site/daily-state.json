@@ -6,9 +6,14 @@
       "label": "Trump"
     },
     {
-      "name": "Gaza",
+      "name": "Ukraine",
       "type": "place",
-      "label": "Gaza"
+      "label": "Ukraine"
+    },
+    {
+      "name": "Russia",
+      "type": "place",
+      "label": "Russia"
     },
     {
       "name": "Iran",
@@ -21,14 +26,9 @@
       "label": "Middle East"
     },
     {
-      "name": "mitra",
-      "type": "gun",
-      "label": "Weapons"
-    },
-    {
-      "name": "Petrolio",
-      "type": "oil",
-      "label": "Oil"
+      "name": "nave",
+      "type": "ship",
+      "label": "Warship"
     },
     {
       "name": "gold",
@@ -39,88 +39,94 @@
       "name": "silver",
       "type": "silver",
       "label": "Silver"
+    },
+    {
+      "name": "pharma",
+      "type": "pharma",
+      "label": "Medical Breakthrough"
     }
   ],
   "headlines": [
+    "Trump criticises Nato as alliance chief describes meeting as 'very frank'",
     "Iran ceasefire deal gives Trump a way out of war - but at a high cost",
     "What we know about the two-week ceasefire between the US and Iran",
-    "Trump-backed Republican Clay Fuller wins election to replace Marjorie Taylor Greene",
-    "Oil prices plunge and shares jump on US-Iran ceasefire plan",
-    "Wireless Festival cancelled after Kanye West blocked from coming to UK",
-    "US journalist Shelly Kittleson released after kidnap in Iraq, officials say",
-    "Plan to scrap presidential elections puts Zimbabweans at loggerheads",
-    "Has Artemis II shown we can land on the Moon again?"
+    "At least 182 killed across Lebanon in large wave of Israeli strikes",
+    "He's Australia's most decorated soldier. Now he's at the centre of a historic war crimes case",
+    "Prosecutors seek Tiger Woods' prescription drug records after Florida arrest",
+    "Greece to ban social media for under-15s from next year",
+    "Germany suspends military approval for long stays abroad for men under 45"
   ],
   "state": {
-    "speed": 0.03789473684210526,
-    "chaos": 1,
-    "density": 0.32863157894736844,
-    "colorMode": 0.18947368421052632,
-    "pointSize": 0.015905263157894735,
-    "opacity": 0.576561403508772
+    "speed": 0.03277777777777778,
+    "chaos": 0.9683098591549296,
+    "density": 0.3442879499217527,
+    "colorMode": 0.24999999999999997,
+    "pointSize": 0.014658841940532082,
+    "opacity": 0.5419405320813772
   },
-  "clima": "High global tension. The world burns.",
+  "clima": "Moderate tension. Unstable equilibrium.",
   "opere": [
     {
+      "nome": "Fracture",
+      "desc": "Work one. Moderate tension. Unstable equilibrium. Signals: conflict 10, crisis 3, economy 3."
+    },
+    {
+      "nome": "Detonation",
+      "desc": "Work two. Matter reacts. Politics 10, humanity 5."
+    },
+    {
       "nome": "Collapse",
-      "desc": "Work one. High global tension. The world burns. Signals: conflict 14, crisis 3, economy 3."
-    },
-    {
-      "nome": "Impact",
-      "desc": "Work two. Matter reacts. Politics 9, humanity 5."
-    },
-    {
-      "nome": "Line of Fire",
-      "desc": "Work three. Variation. Tech 2, total tension 47%."
+      "desc": "Work three. Variation. Tech 3, total tension 38%."
     }
   ],
   "signals": {
-    "war": 14,
+    "war": 10,
     "crisis": 3,
     "economy": 3,
-    "politics": 9,
+    "politics": 10,
     "human": 5,
-    "tech": 2
+    "tech": 3
   },
   "markets": {
     "markets": [
       {
         "name": "S&P 500",
-        "price": 6617,
-        "change": 0.08
+        "price": 0,
+        "change": -100
       },
       {
         "name": "Nikkei",
-        "price": 56308,
-        "change": 5.39
+        "price": 55946,
+        "change": null
       },
       {
         "name": "FTSE",
-        "price": 10582,
-        "change": 2.25
+        "price": 0,
+        "change": -100
       }
     ],
-    "avgChange": 2.57,
+    "avgChange": 0,
     "isUp": true
   },
   "metals": [
     {
       "name": "Gold",
-      "price": 4824.6,
-      "change": 3.6
+      "price": 4741.6,
+      "change": -0.17
     },
     {
       "name": "Silver",
-      "price": 77.11,
-      "change": 7.36
+      "price": 73.91,
+      "change": -1.75
     }
   ],
   "eth": {
-    "price": 2259,
-    "change24h": 6.19
+    "price": 2188,
+    "change24h": -2.33
   },
   "btc": {
-    "price": 71837,
-    "change24h": 3.94
-  }
+    "price": 71040,
+    "change24h": -0.91
+  },
+  "date": "2026-04-11"
 }
