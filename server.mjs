@@ -224,7 +224,7 @@ http.createServer(async (req, res) => {
 
   if (url === '/run-brain') {
     try {
-      execSync('node run-brain.mjs', { cwd: process.cwd() });
+      execSync('node run-brain.mjs && node build-index.mjs', { cwd: process.cwd() });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
     } catch(e) {
